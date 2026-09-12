@@ -1,0 +1,115 @@
+{
+  "model": "iTracker (Krafka et al., CVPR 2016) \u2014 GazeCapture PyTorch checkpoint",
+  "licence": "GazeCapture Research License: research use only, no commercial use, cite the paper",
+  "inputs": {
+    "face": {
+      "shape": [
+        1,
+        3,
+        224,
+        224
+      ],
+      "layout": "NCHW",
+      "dtype": "float32",
+      "range": "0..1 RGB, raw (mean subtraction is inside the graph)"
+    },
+    "eye_left": {
+      "shape": [
+        1,
+        3,
+        224,
+        224
+      ],
+      "layout": "NCHW",
+      "dtype": "float32",
+      "range": "0..1 RGB, raw",
+      "note": "subject's physical LEFT eye = right-hand side of an un-mirrored camera frame"
+    },
+    "eye_right": {
+      "shape": [
+        1,
+        3,
+        224,
+        224
+      ],
+      "layout": "NCHW",
+      "dtype": "float32",
+      "range": "0..1 RGB, raw"
+    },
+    "face_grid": {
+      "shape": [
+        1,
+        625
+      ],
+      "dtype": "float32",
+      "range": "0/1",
+      "layout": "25x25 flattened row-major (index = y*25 + x); 1 where the face box lies within the full frame"
+    }
+  },
+  "output": {
+    "gaze_cm": {
+      "shape": [
+        1,
+        2
+      ],
+      "dtype": "float32",
+      "units": "centimetres from the camera centre",
+      "axes": "[x, y]; +x = subject's right in the camera image, +y = up (screen below camera in portrait => y < 0)"
+    }
+  },
+  "reported_accuracy": "2.46 cm mean L2 error on GazeCapture test split (iPhone+iPad), uncalibrated",
+  "eye_crop_convention": "GazeCapture used Apple CIDetector face/eye boxes; face crop is zero-padded where the box leaves the frame (prepareDataset.cropImage), then resized to 224x224",
+  "tflite": {
+    "file": "itracker.tflite",
+    "weights": "float16 (activations float32); itracker_fp32.tflite is the unquantised reference",
+    "inputs": {
+      "face": {
+        "name": "serving_default_face:0",
+        "shape": [
+          1,
+          224,
+          224,
+          3
+        ],
+        "dtype": "float32"
+      },
+      "eye_left": {
+        "name": "serving_default_eye_left:0",
+        "shape": [
+          1,
+          224,
+          224,
+          3
+        ],
+        "dtype": "float32"
+      },
+      "eye_right": {
+        "name": "serving_default_eye_right:0",
+        "shape": [
+          1,
+          224,
+          224,
+          3
+        ],
+        "dtype": "float32"
+      },
+      "face_grid": {
+        "name": "serving_default_face_grid:0",
+        "shape": [
+          1,
+          625
+        ],
+        "dtype": "float32"
+      }
+    },
+    "output": {
+      "name": "StatefulPartitionedCall:0",
+      "shape": [
+        1,
+        2
+      ]
+    },
+    "layout": "image inputs are NHWC (channels-last), RGB, 0..1 float; mean subtraction is inside the graph",
+    "fp16_vs_fp32_max_abs_diff_cm": 0.00285
+  }
+}

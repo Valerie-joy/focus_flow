@@ -1,0 +1,23 @@
+# Versions that produced app/src/main/assets/itracker.tflite (2026-09-12, Python 3.11, Windows).
+# torch is the CPU build:  pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+torch==2.14.0
+torchvision==0.29.0
+numpy==2.4.6
+scipy==1.17.1
+pillow==12.3.0
+onnx==1.22.0
+onnxruntime==1.30.0
+onnxscript==0.7.2
+# ONNX -> TFLite
+tensorflow-cpu==2.21.0
+tf_keras==2.21.0
+onnx2tf==1.28.8
+onnx-graphsurgeon
+sng4onnx==2.0.1
+onnxsim==0.7.3
+ai-edge-litert==2.2.0
+psutil==7.2.2
+flatbuffers==25.12.19
+# validation harness only
+mediapipe==1.0.1
+opencv-python==5.0.0.93

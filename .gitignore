@@ -27,3 +27,9 @@ secrets.properties
 
 # Logs
 *.log
+
+# iTracker / GazeCapture release (98 MB, research licence) — download from CSAILVision/GazeCapture
+GazeCapture-master/
+tools/itracker/build/
+tools/itracker/.venv/
+tools/itracker/__pycache__/
