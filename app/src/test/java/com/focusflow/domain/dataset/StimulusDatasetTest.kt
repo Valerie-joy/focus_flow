@@ -114,6 +114,70 @@ class StimulusDatasetTest {
         )
     }
 
+    // --- Known dataset gaps, reported rather than hidden ---
+
+    @Test
+    fun `a thin category is reported as a warning, not an error`() {
+        val records = List(2) { stimulus(id = "science_fiction_0$it", mediaId = "media_id_$it") }
+            .map { it.copy(category = AttentionCategory.SCIENCE_FICTION) }
+        val report = StimulusDatasetValidator.validate(records)
+
+        val thin = report.warnings.filter { it.code == "THIN_CATEGORY" }
+        assertEquals(1, thin.size)
+        assertEquals(AttentionCategory.SCIENCE_FICTION.id, thin.first().subject)
+        // A thin category is still playable, so it must not be an error.
+        assertTrue(report.errors.none { it.code == "THIN_CATEGORY" })
+    }
+
+    @Test
+    fun `a category at the recommended minimum is not reported as thin`() {
+        val records = List(StimulusDatasetValidator.MIN_CLIPS_PER_CATEGORY) {
+            stimulus(id = "music_0$it", mediaId = "media_id_$it")
+        }
+        assertTrue(
+            StimulusDatasetValidator.validate(records)
+                .warnings.none { it.code == "THIN_CATEGORY" }
+        )
+    }
+
+    @Test
+    fun `the shipped dataset reports its current thin categories`() {
+        // Documents the real state of the library. If someone later tops up
+        // Science Fiction this will fail, which is the point — it should be
+        // updated deliberately, not drift silently.
+        val thin = StimulusDatasetValidator.validate()
+            .warnings.filter { it.code == "THIN_CATEGORY" }
+            .mapNotNull { it.subject }
+        assertEquals(listOf(AttentionCategory.SCIENCE_FICTION.id), thin)
+    }
+
+    @Test
+    fun `placeholder titles are reported until a clip is re-reviewed`() {
+        val report = StimulusDatasetValidator.validate(
+            listOf(stimulus(id = "a", mediaId = "media_id_a"))
+        )
+        assertTrue(report.warnings.any { it.code == "UNVERIFIED_TITLE" })
+
+        val reviewed = StimulusDatasetValidator.validate(
+            listOf(
+                stimulus(id = "a", mediaId = "media_id_a")
+                    .copy(title = "A real title", titleVerified = true)
+            )
+        )
+        assertTrue(reviewed.warnings.none { it.code == "UNVERIFIED_TITLE" })
+    }
+
+    @Test
+    fun `warnings never exclude a record from the assessment`() {
+        // Thin and unverified rows are playable; only errors withhold a clip.
+        val records = listOf(stimulus(id = "science_fiction_01", mediaId = "media_id_1"))
+            .map { it.copy(category = AttentionCategory.SCIENCE_FICTION) }
+        assertEquals(
+            records.map { it.id },
+            StimulusDatasetValidator.validRecords(records).map { it.id }
+        )
+    }
+
     @Test
     fun `blank title is a warning rather than an error`() {
         val report = StimulusDatasetValidator.validate(listOf(stimulus(title = "")))

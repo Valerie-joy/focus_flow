@@ -54,6 +54,17 @@ object StimulusDatasetValidator {
 
     private val MEDIA_ID_PATTERN = Regex("^[A-Za-z0-9_-]{5,64}$")
 
+    /**
+     * Below this many clips, a category is reported as thin.
+     *
+     * Not an arbitrary number: with a per-session random draw, a category
+     * holding only a clip or two shows the same content to the same user on
+     * repeat sessions, so their score for it increasingly reflects one
+     * specific clip rather than the category. Four is the smallest pool in
+     * the library that doesn't have that problem.
+     */
+    const val MIN_CLIPS_PER_CATEGORY = 4
+
     fun validate(records: List<Stimulus> = StimulusDataset.all): DatasetValidationReport {
         val issues = mutableListOf<DatasetIssue>()
 
@@ -96,6 +107,35 @@ object StimulusDatasetValidator {
             }
 
         records.forEach { record -> issues += validateRecord(record) }
+
+        // Thin categories: present, so not an error, but a real limit on what
+        // that category's score means.
+        records.groupBy { it.category }
+            .filterValues { it.size < MIN_CLIPS_PER_CATEGORY }
+            .forEach { (category, clips) ->
+                issues += DatasetIssue(
+                    severity = DatasetIssue.Severity.WARNING,
+                    code = "THIN_CATEGORY",
+                    message = "Category '${category.displayName}' has only ${clips.size} " +
+                        "clip(s), below the recommended $MIN_CLIPS_PER_CATEGORY. Repeat " +
+                        "sessions will tend to draw the same clip, so its score reflects " +
+                        "that clip more than the category.",
+                    subject = category.id
+                )
+            }
+
+        // Rows still carrying a positional label rather than a real title.
+        val unverified = records.filterNot { it.titleVerified }
+        if (unverified.isNotEmpty()) {
+            issues += DatasetIssue(
+                severity = DatasetIssue.Severity.WARNING,
+                code = "UNVERIFIED_TITLE",
+                message = "${unverified.size} of ${records.size} stimuli still have " +
+                    "placeholder titles and have not been re-reviewed " +
+                    "(${unverified.take(3).joinToString { it.id }}" +
+                    (if (unverified.size > 3) ", …" else "") + ")."
+            )
+        }
 
         AttentionCategory.entries.forEach { category ->
             val weights = traitClusterWeights(category)

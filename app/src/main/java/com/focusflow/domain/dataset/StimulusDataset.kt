@@ -23,6 +23,24 @@ import com.focusflow.domain.models.Stimulus
  *      *this* clip.
  *   4. Give it the next free stable id for its category and add the row.
  *
+ * Rows added through the [addCategory] helper get a positional label and
+ * `titleVerified = false`, which the validator reports until someone does the
+ * review pass. A clip that *has* been re-reviewed should be written out in
+ * full instead, with its real title:
+ *
+ *     Stimulus(
+ *         id = "science_fiction_03",
+ *         category = AttentionCategory.SCIENCE_FICTION,
+ *         title = "<the clip's actual title>",
+ *         mediaId = "<verified content id>",
+ *         titleVerified = true
+ *     )
+ *
+ * Known gap: Science Fiction currently holds fewer clips than every other
+ * category, which the validator reports as THIN_CATEGORY. Closing it needs
+ * clips someone has actually watched — it is deliberately not closed by
+ * generating identifiers.
+ *
  * Age note: the approved PID states that age-appropriate filtering is not
  * implemented in the current build — all nine categories are offered to every
  * user regardless of age, and that is a recorded known limitation rather than
@@ -114,7 +132,10 @@ object StimulusDataset {
                     id = "${category.id}_%02d".format(index + 1),
                     category = category,
                     title = "${category.displayName} clip ${index + 1}",
-                    mediaId = mediaId
+                    mediaId = mediaId,
+                    // Positional label, not the clip's real title — reported
+                    // by the validator until someone re-reviews it.
+                    titleVerified = false
                 )
             )
         }
