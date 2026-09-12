@@ -26,12 +26,25 @@ import com.focusflow.ui.theme.FocusFlowTheme
  * Reads Profile's dark-mode override preference via [AppSettings], a live
  * shared StateFlow (not a one-shot read) — so toggling dark mode in Profile
  * re-themes the whole app instantly instead of only on the next launch.
+ *
+ * Debug builds honour a start-route intent extra so a deep screen (the
+ * camera calibration, say) can be exercised on a device or emulator without
+ * walking the whole sign-in and onboarding flow first:
+ *
+ *     adb shell am start -n com.focusflow/.MainActivity \
+ *         --es focusflow.debug.startRoute camera_calibration
+ *
+ * Gated on [BuildConfig.DEBUG], so release builds always start at Splash.
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         AppSettings.ensureInitialized(applicationContext)
+
+        val startRoute = intent?.getStringExtra(EXTRA_DEBUG_START_ROUTE)
+            ?.takeIf { BuildConfig.DEBUG && it in DEBUG_STARTABLE_ROUTES }
+            ?: FocusFlowDestinations.SPLASH
 
         setContent {
             val systemDark = isSystemInDarkTheme()
@@ -41,7 +54,7 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 NavHost(
                     navController = navController,
-                    startDestination = FocusFlowDestinations.SPLASH
+                    startDestination = startRoute
                 ) {
                     authGraph(navController)
                     onboardingGraph(navController)
@@ -51,5 +64,16 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private companion object {
+        const val EXTRA_DEBUG_START_ROUTE = "focusflow.debug.startRoute"
+
+        /** Top-level routes safe to start at (not the nested assessment graph). */
+        val DEBUG_STARTABLE_ROUTES = setOf(
+            FocusFlowDestinations.CAMERA_PERMISSION,
+            FocusFlowDestinations.CAMERA_CALIBRATION,
+            FocusFlowDestinations.DASHBOARD
+        )
     }
 }

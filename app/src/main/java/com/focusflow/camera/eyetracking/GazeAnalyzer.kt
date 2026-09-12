@@ -155,7 +155,15 @@ class GazeAnalyzer(
         }
     }
 
-    private val landmarker: FaceLandmarker = createLandmarker(context)
+    private val appContext = context.applicationContext
+    private val landmarkerLock = Any()
+    @Volatile
+    private var delegateInUse = Delegate.GPU
+    /** Frames submitted to the landmarker that have not produced a result or error. */
+    private val framesInFlight = java.util.concurrent.atomic.AtomicInteger(0)
+
+    @Volatile
+    private var landmarker: FaceLandmarker = createLandmarker(context)
 
     // GPU delegate isn't guaranteed to be supported on every device; falling
     // back to CPU keeps this from ever being the reason GazeAnalyzer's
@@ -164,11 +172,52 @@ class GazeAnalyzer(
     // fails too).
     private fun createLandmarker(context: Context): FaceLandmarker =
         try {
+            delegateInUse = Delegate.GPU
             buildLandmarker(context, Delegate.GPU)
         } catch (t: Throwable) {
-            Log.w("GazeAnalyzer", "GPU delegate init failed, falling back to CPU", t)
+            Log.w(TAG, "GPU delegate init failed, falling back to CPU", t)
+            delegateInUse = Delegate.CPU
             buildLandmarker(context, Delegate.CPU)
         }
+
+    /**
+     * The GPU delegate can construct fine and then fail on every frame — the
+     * emulator's OpenGL ES does exactly that (GL_INVALID_ENUM inside the face
+     * detector), and phones with broken GL drivers exist. When that happens
+     * MediaPipe logs the error internally and delivers *nothing*: neither the
+     * result listener nor the error listener fires, and detectAsync returns
+     * normally. The only observable symptom is silence. So the fallback is a
+     * watchdog: frames go in, nothing comes back, and after
+     * [STALLED_FRAMES_BEFORE_CPU_FALLBACK] of that on the GPU path the
+     * landmarker is rebuilt on CPU instead of reporting "no face" for the
+     * rest of the session.
+     */
+    private fun noteSubmitted() {
+        val inFlight = framesInFlight.incrementAndGet()
+        if (inFlight >= STALLED_FRAMES_BEFORE_CPU_FALLBACK && delegateInUse == Delegate.GPU) {
+            synchronized(landmarkerLock) {
+                if (delegateInUse == Delegate.GPU && !closed) {
+                    Log.w(TAG, "landmarker produced nothing for $inFlight frames on GPU; rebuilding on CPU")
+                    runCatching { landmarker.close() }
+                    delegateInUse = Delegate.CPU
+                    landmarker = buildLandmarker(appContext, Delegate.CPU)
+                    framesInFlight.set(0)
+                    synchronized(pendingRotation) { pendingRotation.clear() }
+                }
+            }
+        }
+    }
+
+    private fun noteDelivered() {
+        framesInFlight.set(0)
+    }
+
+    private fun onLandmarkerError(error: Throwable?) {
+        if (closed) return
+        noteDelivered()
+        Log.w(TAG, "landmarker error on $delegateInUse: ${error?.message?.lineSequence()?.firstOrNull()}")
+        emitNoFace()
+    }
 
     private fun buildLandmarker(context: Context, delegate: Delegate): FaceLandmarker =
         FaceLandmarker.createFromOptions(
@@ -189,8 +238,8 @@ class GazeAnalyzer(
                 .setOutputFacialTransformationMatrixes(true)
                 // The second argument is the MPImage handed to detectAsync —
                 // the same un-rotated frame — which is what iTracker crops.
-                .setResultListener { result, image -> if (!closed) emit(result, image) }
-                .setErrorListener { if (!closed) emitNoFace() }
+                .setResultListener { result, image -> if (!closed) { noteDelivered(); emit(result, image) } }
+                .setErrorListener { e -> onLandmarkerError(e) }
                 .build()
         )
 
@@ -238,7 +287,15 @@ class GazeAnalyzer(
                     pendingRotation[timestampMs] = rotationDegrees
                 }
             }
-            landmarker.detectAsync(BitmapImageBuilder(bitmap).build(), options, timestampMs)
+            synchronized(landmarkerLock) {
+                if (!closed) {
+                    landmarker.detectAsync(BitmapImageBuilder(bitmap).build(), options, timestampMs)
+                    noteSubmitted()
+                }
+            }
+        }.onFailure { e ->
+            synchronized(pendingRotation) { pendingRotation.remove(timestampMs) }
+            onLandmarkerError(e)
         }
     }
 
@@ -382,9 +439,12 @@ class GazeAnalyzer(
 
     fun close() {
         closed = true
-        runCatching { landmarker.close() }
+        synchronized(landmarkerLock) { runCatching { landmarker.close() } }
         runCatching { gazePointEstimator?.close() }
     }
+
+    /** Which delegate the landmarker is currently running on (for logs/UI). */
+    val landmarkerDelegate: Delegate get() = delegateInUse
 
     private companion object {
         const val TAG = "GazeAnalyzer"
@@ -393,6 +453,8 @@ class GazeAnalyzer(
         const val BLINK_THRESHOLD = 0.5f
         /** Upper bound on frames between iTracker runs (~3 Hz at 30 fps). */
         const val MAX_GAZE_POINT_SKIP = 10
+        /** Frames submitted with no result or error back (~1 s at 30 fps) before the GPU landmarker is rebuilt on CPU. */
+        const val STALLED_FRAMES_BEFORE_CPU_FALLBACK = 30
 
         /**
          * The 468→478 iris refinement. In MediaPipe's convention 468-472 is
