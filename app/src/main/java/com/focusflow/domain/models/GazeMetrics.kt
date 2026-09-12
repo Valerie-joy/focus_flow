@@ -23,7 +23,16 @@ data class GazeMetrics(
      * video playback, and it "varies across devices and must be logged per
      * session". It is persisted with the session for exactly that reason.
      */
-    val analysisFrameRate: Float = 0f
+    val analysisFrameRate: Float = 0f,
+    /**
+     * Frames whose "looking at the screen" decision came from the calibrated
+     * iTracker point of regard rather than the blendshape rule. 0 means the
+     * clip ran in blendshape-only mode (no estimator, no calibration, or the
+     * fit was rejected) — the two modes should not be pooled when reporting.
+     */
+    val gazePointDecidedFrames: Int = 0,
+    /** Mean iTracker inference wall time this clip, ms; 0 if it never ran. */
+    val gazePointMeanInferenceMs: Float = 0f
 ) {
     /**
      * Whether enough frames were analyzed to trust the derived measures. A clip
@@ -43,9 +52,18 @@ data class GazeMetrics(
         if (actualDurationMs <= 0L) add("UNKNOWN_DURATION")
     }
 
+    /**
+     * Which signal decided "looking at the screen" for this clip. Not a
+     * quality flag — both modes are valid — but sessions from the two should
+     * not be pooled when reporting, so it is persisted alongside them.
+     */
+    val gazeMode: String get() = if (gazePointDecidedFrames > 0) GAZE_MODE_POINT else GAZE_MODE_BLENDSHAPE
+
     companion object {
         const val MIN_FRAMES_FOR_CONFIDENCE = 30
         const val LOW_FPS_THRESHOLD = 5f
+        const val GAZE_MODE_POINT = "GAZE_POINT"
+        const val GAZE_MODE_BLENDSHAPE = "BLENDSHAPE"
     }
 }
 

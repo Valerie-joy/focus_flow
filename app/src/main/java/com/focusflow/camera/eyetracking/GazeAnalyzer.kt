@@ -1,12 +1,22 @@
 package com.focusflow.camera.eyetracking
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
+import com.focusflow.camera.eyetracking.itracker.AffineMap
+import com.focusflow.camera.eyetracking.itracker.GazeFusion
+import com.focusflow.camera.eyetracking.itracker.GazePointCm
+import com.focusflow.camera.eyetracking.itracker.GazePointEstimator
+import com.focusflow.camera.eyetracking.itracker.ITrackerPreprocessor
+import com.focusflow.camera.eyetracking.itracker.ScreenPoint
+import com.google.mediapipe.framework.image.BitmapExtractor
 import com.google.mediapipe.framework.image.BitmapImageBuilder
+import com.google.mediapipe.framework.image.MPImage
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.core.Delegate
 import com.google.mediapipe.tasks.vision.core.ImageProcessingOptions
@@ -16,6 +26,7 @@ import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
 import kotlin.math.abs
 import kotlin.math.asin
 import kotlin.math.atan2
+import kotlin.math.ceil
 import kotlin.math.max
 
 /** A normalized (0..1) point in the analyzed image's coordinate space. */
@@ -39,7 +50,19 @@ data class GazeFrame(
     val irisPoints: List<GazePoint>,
     /** Eye-corner/lid points, for the setup-step overlay. */
     val eyePoints: List<GazePoint>,
-    val timestampMs: Long
+    val timestampMs: Long,
+    /**
+     * iTracker's raw point of regard, cm from the camera centre, on the
+     * frames it ran for (every Nth frame — see [GazeAnalyzer]); null otherwise
+     * and when no estimator is attached. The calibration screen collects these.
+     */
+    val gazePointCm: GazePointCm? = null,
+    /** [gazePointCm] mapped through the user's calibration, when one is set. */
+    val gazeScreenPoint: ScreenPoint? = null,
+    /** True when [isLookingAtScreen] was decided by the calibrated gaze point rather than the blendshape rule. */
+    val decidedByGazePoint: Boolean = false,
+    /** Wall time of the iTracker inference on this frame, if it ran. */
+    val gazeInferenceMs: Float? = null
 )
 
 /**
@@ -55,12 +78,25 @@ data class GazeFrame(
  * points (indices 468-477) — and 52 blendshapes, of which eight describe gaze
  * direction directly (`eyeLook{In,Out,Up,Down}{Left,Right}`).
  *
- * Honest scope note: this measures gaze *direction* relative to head pose, and
- * reliably catches "eyes are deflected well off centre". It is NOT a calibrated
- * gaze-point estimator — it cannot say *where* on the screen someone is looking
- * (e.g. reading a caption vs watching the centre). That would need a per-user
- * calibration fit, which the existing CameraCalibrationScreen is the natural
- * place to add.
+ * Two gaze signals come out of this class:
+ *
+ *  1. Blendshape deflection plus head pose, every frame. This measures gaze
+ *     *direction* relative to the head and reliably catches "eyes are
+ *     deflected well off centre", but cannot say *where* on the screen someone
+ *     is looking.
+ *  2. Optionally, iTracker's point of regard (Krafka et al., CVPR 2016) via
+ *     [GazePointEstimator], on every Nth frame. Fed the landmarker's own
+ *     landmarks and the same frame, it returns a gaze point in cm from the
+ *     camera, which the user's [AffineMap] from the camera setup step turns
+ *     into a screen position. When a calibration is attached, that position
+ *     decides [GazeFrame.isLookingAtScreen] through [GazeFusion]; without
+ *     one, signal 1 decides and the raw cm point is merely reported.
+ *
+ * iTracker runs synchronously on the landmarker's result thread so frames
+ * reach the consumer in order (AttentionTracker's sustain timing depends on
+ * monotonic delivery). It is several times heavier than the landmarker, so
+ * it self-throttles: after each run it measures its own wall time and skips
+ * enough frames to keep its average cost under [gazePointBudgetMsPerFrame].
  *
  * All inference is on-device; frames are converted in memory and never stored.
  */
@@ -71,11 +107,32 @@ class GazeAnalyzer(
     /** Head rotation past which the head counts as turned away. */
     private val headYawThresholdDegrees: Float = 25f,
     private val headPitchThresholdDegrees: Float = 20f,
+    /** Attach to also produce iTracker gaze points. The analyzer owns and closes it. */
+    private val gazePointEstimator: GazePointEstimator? = null,
+    /** The user's calibration; when non-null the gaze point decides isLookingAtScreen. */
+    private val calibration: AffineMap? = null,
+    /** Amortised per-frame time iTracker may consume; sets the adaptive skip. */
+    private val gazePointBudgetMsPerFrame: Float = 25f,
     private val onGazeFrame: (GazeFrame) -> Unit
 ) : ImageAnalysis.Analyzer {
 
     private var lastTimestampMs = Long.MIN_VALUE
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    // --- iTracker state, all touched only on the landmarker's result thread ---
+    private val preprocessor: ITrackerPreprocessor? = gazePointEstimator?.let { ITrackerPreprocessor() }
+    private val fusion = GazeFusion()
+    private val landmarkXs = FloatArray(TOTAL_LANDMARKS)
+    private val landmarkYs = FloatArray(TOTAL_LANDMARKS)
+    private var framesUntilGazePoint = 0
+    /** Rotation applied to each in-flight frame, keyed by its timestamp. */
+    private val pendingRotation = HashMap<Long, Int>()
+
+    /** The most recent 224x224 face crop fed to iTracker, for a debug view. */
+    val lastFaceCrop: Bitmap? get() = preprocessor?.lastFaceCrop
+    val gazePointMeanInferenceMs: Float get() = gazePointEstimator?.meanInferenceMs ?: 0f
+    val hasGazePointEstimator: Boolean get() = gazePointEstimator != null
+    val isCalibrated: Boolean get() = calibration != null
 
     // MediaPipe's LIVE_STREAM result/error listeners fire on MediaPipe's own
     // internal thread — not the CameraX analyzer executor, and not main. Every
@@ -130,7 +187,9 @@ class GazeAnalyzer(
                 // looked at yaw, so looking down at your lap read as attentive).
                 .setOutputFaceBlendshapes(true)
                 .setOutputFacialTransformationMatrixes(true)
-                .setResultListener { result, _ -> if (!closed) emit(result) }
+                // The second argument is the MPImage handed to detectAsync —
+                // the same un-rotated frame — which is what iTracker crops.
+                .setResultListener { result, image -> if (!closed) emit(result, image) }
                 .setErrorListener { if (!closed) emitNoFace() }
                 .build()
         )
@@ -171,11 +230,21 @@ class GazeAnalyzer(
             val options = ImageProcessingOptions.builder()
                 .setRotationDegrees(rotationDegrees)
                 .build()
+            if (gazePointEstimator != null) {
+                // emit() needs the rotation to upright the frame for cropping.
+                // Bounded: a result that never arrives (error path) must not leak.
+                synchronized(pendingRotation) {
+                    if (pendingRotation.size > 8) pendingRotation.clear()
+                    pendingRotation[timestampMs] = rotationDegrees
+                }
+            }
             landmarker.detectAsync(BitmapImageBuilder(bitmap).build(), options, timestampMs)
         }
     }
 
     private fun emitNoFace() {
+        // A carried-forward on-screen verdict must not survive losing the face.
+        fusion.reset()
         deliver(
             GazeFrame(
                 faceDetected = false,
@@ -192,9 +261,10 @@ class GazeAnalyzer(
         )
     }
 
-    private fun emit(result: FaceLandmarkerResult) {
+    private fun emit(result: FaceLandmarkerResult, image: MPImage) {
         val landmarks = result.faceLandmarks().firstOrNull()
         if (landmarks == null || landmarks.size < TOTAL_LANDMARKS) {
+            synchronized(pendingRotation) { pendingRotation.remove(result.timestampMs()) }
             emitNoFace()
             return
         }
@@ -233,12 +303,52 @@ class GazeAnalyzer(
 
         // A blink shouldn't read as looking away — the tracker counts blinks
         // separately and they'd otherwise shred the attention percentage.
-        val isLooking = !headTurnedAway && !eyesDeflected
+        val blendshapeLooking = !headTurnedAway && !eyesDeflected
+
+        // --- iTracker point of regard, on the frames it is due ---------------
+        var gazeCm: GazePointCm? = null
+        var inferenceMs: Float? = null
+        val estimator = gazePointEstimator
+        val prep = preprocessor
+        if (estimator != null && prep != null && framesUntilGazePoint <= 0) {
+            val rotation = synchronized(pendingRotation) { pendingRotation.remove(result.timestampMs()) } ?: 0
+            runCatching {
+                val upright = uprightBitmap(BitmapExtractor.extract(image), rotation)
+                // Landmarks are normalised to the rotated (upright) frame —
+                // the same space the setup overlay draws them in.
+                val w = upright.width.toFloat()
+                val h = upright.height.toFloat()
+                for (i in 0 until TOTAL_LANDMARKS) {
+                    landmarkXs[i] = landmarks[i].x() * w
+                    landmarkYs[i] = landmarks[i].y() * h
+                }
+                val inputs = prep.prepare(upright, landmarkXs, landmarkYs)
+                gazeCm = estimator.estimate(inputs)
+                inferenceMs = estimator.lastInferenceMs
+            }.onFailure { Log.w(TAG, "iTracker inference failed on this frame", it) }
+
+            // Adaptive skip: keep the amortised cost under budget. A failed
+            // run backs off to the maximum rather than retrying every frame.
+            framesUntilGazePoint = inferenceMs
+                ?.let { ceil(it / gazePointBudgetMsPerFrame).toInt().coerceIn(1, MAX_GAZE_POINT_SKIP) }
+                ?: MAX_GAZE_POINT_SKIP
+        } else {
+            synchronized(pendingRotation) { pendingRotation.remove(result.timestampMs()) }
+        }
+        framesUntilGazePoint--
+
+        // --- final decision ----------------------------------------------------
+        val screenPoint = calibration?.let { cal -> gazeCm?.let(cal::map) }
+        val decision = if (calibration != null) {
+            fusion.decide(blendshapeLooking, headTurnedAway, screenPoint, lastTimestampMs)
+        } else {
+            GazeFusion.Decision(blendshapeLooking, fromGazePoint = false, screenPoint = null)
+        }
 
         deliver(
             GazeFrame(
                 faceDetected = true,
-                isLookingAtScreen = isLooking,
+                isLookingAtScreen = decision.isLooking,
                 headYawDegrees = yaw,
                 headPitchDegrees = pitch,
                 horizontalGaze = horizontalGaze,
@@ -251,28 +361,51 @@ class GazeAnalyzer(
                 // points are drawn over.
                 irisPoints = IRIS_INDICES.map { GazePoint(x = 1f - landmarks[it].x(), y = landmarks[it].y()) },
                 eyePoints = EYE_OUTLINE_INDICES.map { GazePoint(x = 1f - landmarks[it].x(), y = landmarks[it].y()) },
-                timestampMs = lastTimestampMs
+                timestampMs = lastTimestampMs,
+                gazePointCm = gazeCm,
+                gazeScreenPoint = decision.screenPoint ?: screenPoint,
+                decidedByGazePoint = decision.fromGazePoint,
+                gazeInferenceMs = inferenceMs
             )
         )
+    }
+
+    /**
+     * The frame as the landmarker saw it after its internal rotation. For
+     * 0° the extracted bitmap is returned as-is (no copy).
+     */
+    private fun uprightBitmap(src: Bitmap, rotationDegrees: Int): Bitmap {
+        if (rotationDegrees % 360 == 0) return src
+        val m = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
+        return Bitmap.createBitmap(src, 0, 0, src.width, src.height, m, true)
     }
 
     fun close() {
         closed = true
         runCatching { landmarker.close() }
+        runCatching { gazePointEstimator?.close() }
     }
 
     private companion object {
+        const val TAG = "GazeAnalyzer"
         const val MODEL_ASSET = "face_landmarker.task"
         const val TOTAL_LANDMARKS = 478
         const val BLINK_THRESHOLD = 0.5f
+        /** Upper bound on frames between iTracker runs (~3 Hz at 30 fps). */
+        const val MAX_GAZE_POINT_SKIP = 10
 
-        /** Left iris 468-472, right iris 473-477 — the 468→478 refinement. */
+        /**
+         * The 468→478 iris refinement. In MediaPipe's convention 468-472 is
+         * the subject's RIGHT iris (image left in an un-mirrored frame) and
+         * 473-477 the subject's LEFT. Sidedness is irrelevant to this overlay
+         * but matters to iTracker — see ITrackerGeometry, which owns it.
+         */
         val IRIS_INDICES = (468..477).toList()
 
         /** Eye corners/lids, enough to sketch both eyes in the overlay. */
         val EYE_OUTLINE_INDICES = listOf(
-            33, 133, 159, 145, 160, 144,   // left eye
-            362, 263, 386, 374, 387, 373   // right eye
+            33, 133, 159, 145, 160, 144,   // subject's right eye
+            362, 263, 386, 374, 387, 373   // subject's left eye
         )
 
         /**

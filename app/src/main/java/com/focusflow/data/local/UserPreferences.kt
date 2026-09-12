@@ -1,6 +1,7 @@
 package com.focusflow.data.local
 
 import android.content.Context
+import com.focusflow.camera.eyetracking.itracker.AffineMap
 
 /**
  * Lightweight SharedPreferences-backed store for profile fields and simple
@@ -58,6 +59,15 @@ class UserPreferences(context: Context) {
         }).apply()
     }
 
+    // ── Gaze calibration ─────────────────────────────────────────────
+    // The affine fit from the camera setup step that maps iTracker's cm
+    // output onto this user's screen. Per user *and* per device by nature —
+    // the camera offset it absorbs belongs to the handset — so it is stored
+    // here beside the profile rather than synced to the backend.
+    fun getGazeCalibration(): AffineMap? = AffineMap.decode(prefs.getString(KEY_GAZE_CALIBRATION, null))
+    fun saveGazeCalibration(map: AffineMap) = prefs.edit().putString(KEY_GAZE_CALIBRATION, map.encode()).apply()
+    fun clearGazeCalibration() = prefs.edit().remove(KEY_GAZE_CALIBRATION).apply()
+
     /** Clears everything — called on logout. */
     fun clearAll() {
         prefs.edit().clear().apply()
@@ -73,5 +83,6 @@ class UserPreferences(context: Context) {
         private const val KEY_WEEKLY_SUMMARY = "settings_weekly_summary"
         private const val KEY_ANALYTICS = "settings_analytics"
         private const val KEY_DARK_MODE = "settings_dark_mode"
+        private const val KEY_GAZE_CALIBRATION = "gaze_calibration_affine"
     }
 }

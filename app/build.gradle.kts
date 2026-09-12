@@ -39,6 +39,13 @@ android {
         buildConfig = true
     }
 
+    // Keep model files stored uncompressed in the APK so they can be
+    // memory-mapped straight from the asset file descriptor instead of being
+    // inflated into a heap copy on every open (itracker.tflite is 13.5 MB).
+    androidResources {
+        noCompress += listOf("tflite", "task")
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -86,6 +93,15 @@ dependencies {
     // only ever infer attention from head angle. Model lives in
     // app/src/main/assets/face_landmarker.task.
     implementation("com.google.mediapipe:tasks-vision:1.0.0")
+
+    // LiteRT (TensorFlow Lite) runtime for the iTracker gaze-point model in
+    // app/src/main/assets/itracker.tflite — see tools/itracker/README.md.
+    // MediaPipe bundles its own TFLite statically inside its JNI library and
+    // exposes no interpreter, so a separate runtime is needed. 1.4.x is the
+    // classic org.tensorflow.lite.Interpreter API; the 2.x "CompiledModel" API
+    // is a different surface and was not adopted. CPU/XNNPACK only: the GPU
+    // delegate has no LRN kernel, so it would just partition the graph.
+    implementation("com.google.ai.edge.litert:litert:1.4.2")
 
     // Room (Stage 8)
     implementation("androidx.room:room-runtime:2.8.4")

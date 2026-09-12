@@ -56,6 +56,9 @@ import androidx.core.content.ContextCompat
 import com.focusflow.ai.attention.AttentionTracker
 import com.focusflow.camera.eyetracking.GazeAnalyzer
 import com.focusflow.camera.eyetracking.GazeFrame
+import com.focusflow.camera.eyetracking.itracker.GazeCalibration
+import com.focusflow.camera.eyetracking.itracker.GazePointEstimator
+import com.focusflow.data.local.UserPreferences
 import com.focusflow.domain.models.AttentionCategory
 import com.focusflow.domain.models.GazeMetrics
 import com.focusflow.domain.dataset.StimulusDataset
@@ -501,8 +504,22 @@ private fun AttentionPlaybackStep(
                 trackingUnavailable = true
                 return@Runnable
             }
+            // Point-of-regard mode needs a calibration good enough to trust;
+            // without one the clip runs on the blendshape rule alone and the
+            // iTracker model is not even loaded (it is the expensive part).
+            val calibration = UserPreferences(context).getGazeCalibration()
+                ?.takeIf { it.residualRms <= GazeCalibration.MAX_ACCEPTABLE_RESIDUAL }
+            val estimator = calibration?.let {
+                runCatching { GazePointEstimator(context.applicationContext) }
+                    .onFailure { Log.w("AttentionAssessment", "iTracker unavailable, blendshape-only", it) }
+                    .getOrNull()
+            }
             val newAnalyzer = try {
-                GazeAnalyzer(context.applicationContext) { frame ->
+                GazeAnalyzer(
+                    context.applicationContext,
+                    gazePointEstimator = estimator,
+                    calibration = if (estimator != null) calibration else null
+                ) { frame ->
                     if (stopped) return@GazeAnalyzer
                     val result = tracker.recordFrame(
                         faceDetected = frame.faceDetected,
@@ -512,7 +529,9 @@ private fun AttentionPlaybackStep(
                         // 1-second UI tick quantised every duration to whole
                         // seconds, so the 1.5s sustain threshold could never fire
                         // on time — and froze entirely whenever playback paused.
-                        timestampMs = frame.timestampMs
+                        timestampMs = frame.timestampMs,
+                        decidedByGazePoint = frame.decidedByGazePoint,
+                        gazeInferenceMs = frame.gazeInferenceMs
                     )
                     if (result.attentionDroppedSustained && !stopped) {
                         stopped = true

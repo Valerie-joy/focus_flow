@@ -34,6 +34,9 @@ class AttentionTracker(
     private var sessionStartMs: Long? = null
     private var lastFrameMs: Long? = null
     private var faceLostFrames = 0
+    private var gazePointDecidedFrames = 0
+    private var gazeInferenceSumMs = 0f
+    private var gazeInferenceCount = 0
 
     /** (timestampMs, wasLooking) for the last [rollingWindowMs] of frames. */
     private val window = ArrayDeque<Pair<Long, Boolean>>()
@@ -56,6 +59,9 @@ class AttentionTracker(
         sessionStartMs = null
         lastFrameMs = null
         faceLostFrames = 0
+        gazePointDecidedFrames = 0
+        gazeInferenceSumMs = 0f
+        gazeInferenceCount = 0
         window.clear()
     }
 
@@ -74,7 +80,11 @@ class AttentionTracker(
         faceDetected: Boolean,
         isLookingAtScreen: Boolean,
         eyesClosed: Boolean,
-        timestampMs: Long
+        timestampMs: Long,
+        /** Whether the calibrated gaze point (not the blendshape rule) made this frame's decision. */
+        decidedByGazePoint: Boolean = false,
+        /** iTracker wall time on this frame, when it ran. */
+        gazeInferenceMs: Float? = null
     ): FrameResult {
         if (sessionStartMs == null) {
             if (!faceDetected) {
@@ -92,6 +102,8 @@ class AttentionTracker(
         totalFrames++
         if (isLooking) lookingFrames++
         if (!faceDetected) faceLostFrames++
+        if (decidedByGazePoint) gazePointDecidedFrames++
+        if (gazeInferenceMs != null) { gazeInferenceSumMs += gazeInferenceMs; gazeInferenceCount++ }
         lastFrameMs = timestampMs
 
         // Gaze shift: a transition between looking and not-looking. Seeded from
@@ -180,7 +192,9 @@ class AttentionTracker(
             blinkCount = blinkCount,
             analyzedFrameCount = totalFrames,
             faceLostFrameCount = faceLostFrames,
-            analysisFrameRate = analysisFrameRate()
+            analysisFrameRate = analysisFrameRate(),
+            gazePointDecidedFrames = gazePointDecidedFrames,
+            gazePointMeanInferenceMs = if (gazeInferenceCount > 0) gazeInferenceSumMs / gazeInferenceCount else 0f
         )
     }
 }

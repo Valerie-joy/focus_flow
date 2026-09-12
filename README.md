@@ -26,7 +26,9 @@ app/src/main/java/com/focusflow/
   ai/attention/
     AttentionTracker.kt — accumulates per-frame face detection into GazeMetrics + sustained-drop detection
   camera/eyetracking/
-    FaceDetectionAnalyzer.kt — CameraX ImageAnalysis.Analyzer wrapping ML Kit Face Detection (now also exposes head yaw + eye-open probability for Stage 5)
+    GazeAnalyzer.kt — CameraX ImageAnalysis.Analyzer wrapping MediaPipe Face Landmarker (iris + blendshape gaze, head pose), optionally running iTracker every Nth frame
+    CalibrationGate.kt — stable face/iris acquisition gate for the camera setup step
+    itracker/ — ITrackerGeometry (crop/grid conventions), ITrackerPreprocessor, GazePointEstimator (LiteRT), GazeCalibration (affine fit), GazeFusion
   domain/models/
     AdhdSelfReportQuestion.kt — question bank + FrequencyAnswer enum for the self-reflection questionnaire
     AttentionCategory.kt — the 9 shuffled content categories
@@ -77,7 +79,7 @@ app/src/main/java/com/focusflow/
       AdhdAssessmentScreen.kt     — disclaimer step + one-question-per-screen questionnaire
       UserRegistrationScreen.kt   — full name, age (5-30 stepper), sex (segmented toggle), email
       CameraPermissionScreen.kt   — privacy explanation + CAMERA permission request
-      CameraCalibrationScreen.kt  — live CameraX preview + ML Kit face detection + animated target
+      CameraCalibrationScreen.kt  — live CameraX preview + acquisition gate + five-dot gaze calibration
     assessment/
       AttentionAssessmentScreen.kt — plays a video while a hidden (no-preview) camera analysis stream feeds AttentionTracker; stops early on sustained attention drop
       AttentionShiftedScreen.kt    — "We noticed your attention shifted" interruption screen
@@ -123,8 +125,9 @@ app/src/main/java/com/focusflow/
    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
    implementation("androidx.camera:camera-view:$cameraxVersion")
 
-   // ML Kit Face Detection (Stage 4)
-   implementation("com.google.mlkit:face-detection:16.1.7")
+   // MediaPipe Face Landmarker (Stage 4-5) + LiteRT for iTracker
+   implementation("com.google.mediapipe:tasks-vision:1.0.0")
+   implementation("com.google.ai.edge.litert:litert:1.4.2")
 
    // ViewModel + StateFlow-in-Compose support (Stage 5)
    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
@@ -228,27 +231,27 @@ app/src/main/java/com/focusflow/
   is fully navigable. Swap in real validation (parse the file, confirm it
   reads as a diagnosis letter, maybe route to human review) behind the same
   `UploadState` contract the screen already expects.
-- **`FaceDetectionAnalyzer` only detects whether eyes/a face are present**
-  — that's what the calibration gate needs. It deliberately does NOT do
-  gaze-point estimation (where on screen someone is looking); that's a
-  materially harder feature (MediaPipe Face Mesh + iris landmarks + a
-  calibrated model) needed for Phase 5's actual attention tracking, and
-  belongs in its own use-case once you're ready to build that. The analyzer
-  hands back the raw ML Kit `Face` object so later work can read landmarks
-  off it without re-plumbing the camera pipeline.
+- **`GazeAnalyzer` produces two gaze signals.** MediaPipe Face Landmarker
+  (478 landmarks incl. 10 iris points, 52 blendshapes, head pose) runs every
+  frame and gives gaze *deflection* — reliable for "eyes are off centre",
+  blind to *where* they point. Optionally, iTracker runs on every Nth frame
+  and gives a calibrated *point of regard* — see "Gaze-point estimation"
+  below. `GazeFusion` combines them into the single `isLookingAtScreen`
+  decision `AttentionTracker` consumes.
 - **Camera frames are never persisted** — `ImageAnalysis` frames are
-  processed in memory by ML Kit and immediately closed; nothing is written
-  to disk, matching the privacy copy shown on `CameraPermissionScreen`.
+  converted in memory, handed to on-device MediaPipe (and iTracker) and
+  released; nothing is written to disk, matching the privacy copy shown on
+  `CameraPermissionScreen`.
 - `RegistrationNavGraph.kt` includes a **temporary placeholder** for the
   `DASHBOARD` route so the whole onboarding flow (Splash → … → Calibration
   → Assessment) is testable end to end before Phase 8 exists. Delete that
   composable once the real dashboard is built.
 - **Attention tracking is real, not simulated** — `AttentionTracker`
-  consumes actual per-frame ML Kit output (face presence, head yaw, eye-open
-  probability) during video playback and computes screen-attention %, gaze
-  shift count, first-distraction time, and blink count from it. What it can't
-  do is true gaze-point estimation — see the class doc for exactly where
-  that line is and what a fuller implementation would need.
+  consumes the per-frame `GazeFrame` (face presence, looking decision, blink)
+  during video playback and computes screen-attention %, gaze shift count,
+  first-distraction time, blink count, analysis frame rate, and — when
+  calibrated — how many frames the gaze point decided, plus iTracker's mean
+  inference time, so the two modes can be reported separately.
 - **Video content itself is a placeholder** — `VideoPlayerCard` renders a
   themed gradient, not real per-category video. There's a `// TODO` in that
   file marking where an ExoPlayer/media3 `PlayerView` would go once real
@@ -361,6 +364,46 @@ app/src/main/java/com/focusflow/
   (`support@focusflow.app`) in `EmailReportService.contactSupport()` —
   swap that for your real support inbox.
 
+## Gaze-point estimation (iTracker)
+
+Since 2026-09 the app can estimate **where on the screen** the user is
+looking, not only whether their eyes are deflected. This closes the
+"no calibrated point-of-regard" limitation stated in the PID and manuscript.
+
+**Model.** iTracker from *Eye Tracking for Everyone* (Krafka et al., CVPR
+2016), the released GazeCapture PyTorch checkpoint exported to
+`app/src/main/assets/itracker.tflite` (13.5 MB, float16 weights) by
+`tools/itracker/` — every export stage is numerically verified, see that
+directory's README. It takes a 224² face crop, two 224² eye crops and a 25×25
+face-position grid, all synthesised from MediaPipe's landmarks by
+`ITrackerPreprocessor`, and returns a gaze point in cm from the camera.
+
+**Calibration.** iTracker was trained on iPhones/iPads; Android cameras sit at
+unknown offsets and the checkpoint is a ~2.5 cm instrument uncalibrated. So
+`CameraCalibrationScreen` gains a five-dot pass after the acquisition gate:
+the user looks at each dot, per-dot medians of the model's output are fitted
+to the dot positions with a least-squares affine map (`GazeCalibration`), and
+a fit within tolerance is saved per user in `UserPreferences`. The map
+absorbs camera offset, screen scale and axis sign in six parameters — no
+device database. Every exit is graceful: no model, a poor fit, or "skip"
+leaves the app in the blendshape-only mode it had before.
+
+**Runtime.** LiteRT 1.4.2, CPU/XNNPACK, four threads. iTracker runs
+synchronously on the landmarker's result thread (so frames stay in order for
+`AttentionTracker`'s sustain timing) and self-throttles: it measures its own
+wall time and skips enough frames to stay under ~25 ms amortised per frame.
+`GazeMetrics.gazeMode` records which signal decided each clip.
+
+**Licence — read before distributing.** The GazeCapture dataset, models and
+code are under a *Research License*: research use only, **no commercial use**
+in any form (including derived models), and any publication must cite the
+paper. That is fine for this student project and the STA manuscript; the app
+cannot be published commercially while it ships this model.
+
+> Krafka, K., Khosla, A., Kellnhofer, P., Kannan, H., Bhandarkar, S.,
+> Matusik, W., & Torralba, A. (2016). *Eye Tracking for Everyone.* IEEE
+> Conference on Computer Vision and Pattern Recognition (CVPR).
+
 ## Stage 11: Real YouTube video playback
 
 `AttentionAssessmentScreen` now embeds actual YouTube videos instead of a
@@ -418,7 +461,7 @@ All ten phases from the original master prompt are built:
 | 1. Auth | ✅ Splash, Welcome, Login, Register |
 | 2. ADHD verification | ✅ Question, document upload, self-reflection questionnaire (reframed — see below) |
 | 3. User registration | ✅ Name, age, sex, email |
-| 4. Camera calibration | ✅ Real CameraX + ML Kit face detection |
+| 4. Camera calibration | ✅ Real CameraX + MediaPipe acquisition gate + iTracker gaze calibration |
 | 5. Adaptive attention assessment | ✅ Real gaze tracking, shuffle/retry/success-count loop |
 | 6. AI analysis | ✅ Real scoring engine, radar chart, progress rings, ranking |
 | 7. Personalized recommendations | ✅ Learning style inference, study techniques, content types, weekly goals |

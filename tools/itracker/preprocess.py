@@ -21,6 +21,12 @@ part of that approximation and the per-user calibration absorbs residual bias.
 import numpy as np
 from PIL import Image
 
+
+def _r(v):
+    """Round half up. Matches ITrackerGeometry.roundHalfUp in the app; neither
+    Python's banker's round() nor Kotlin's roundToInt() agree at exact .5."""
+    return int(np.floor(v + 0.5))
+
 IM = 224
 GRID = 25
 
@@ -51,14 +57,16 @@ def face_box(pts):
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
     side = max(x1 - x0, y1 - y0) * FACE_BOX_SCALE
     cy -= side * FACE_BOX_UP_SHIFT
-    return int(round(cx - side / 2)), int(round(cy - side / 2)), int(round(side)), int(round(side))
+    s = _r(side)
+    return _r(cx - side / 2), _r(cy - side / 2), s, s
 
 
 def eye_box(pts, idx, face_w):
     """Square box (x, y, w, h) centred on the mean of the eye-contour landmarks."""
     c = pts[idx].mean(0)
     side = face_w * EYE_BOX_FRAC_OF_FACE
-    return int(round(c[0] - side / 2)), int(round(c[1] - side / 2)), int(round(side)), int(round(side))
+    s = _r(side)
+    return _r(c[0] - side / 2), _r(c[1] - side / 2), s, s
 
 
 def crop_zero_pad(img, box):
@@ -85,8 +93,8 @@ def face_grid(frame_w, frame_h, box):
     faceGridFromFaceRect would produce for a new detection."""
     x, y, w, h = box
     sx, sy = GRID / frame_w, GRID / frame_h
-    gx, gy = int(round(x * sx)), int(round(y * sy))
-    gw, gh = int(round(w * sx)), int(round(h * sy))
+    gx, gy = _r(x * sx), _r(y * sy)
+    gw, gh = _r(w * sx), _r(h * sy)
     g = np.zeros((GRID, GRID), np.float32)
     x0, x1 = max(0, gx), min(GRID, gx + gw)
     y0, y1 = max(0, gy), min(GRID, gy + gh)
