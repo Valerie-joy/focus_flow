@@ -1,0 +1,29 @@
+# Build output
+build/
+app/build/
+.gradle/
+.kotlin/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# Local configuration — machine-specific paths AND the Supabase/Google client
+# config read by app/build.gradle.kts. Must never be committed.
+local.properties
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+captures/
+
+# Keystores and secrets
+*.jks
+*.keystore
+google-services.json
+secrets.properties
+
+# Logs
+*.log

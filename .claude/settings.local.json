@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(curl -s https://api.github.com/repos/google/ksp/releases?per_page=15)",
+      "Bash(curl -s https://api.github.com/repos/google/ksp/releases/tags/2.3.10)",
+      "Bash(JAVA_HOME=\"C:/Program Files/Android/Android Studio/jbr\" ./gradlew.bat assembleDebug --console=plain)"
+    ]
+  }
+}
