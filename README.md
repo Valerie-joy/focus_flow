@@ -431,16 +431,22 @@ themed gradient placeholder:
   Google's own "YouTube Android Player API" is deprecated, so this is the
   maintained community-standard replacement (5,000+ apps use it, including
   some well-known ones).
-- **`CategoryVideoLibrary.kt`** (`domain/models/`) maps each `AttentionCategory`
-  to a list of video IDs. **The IDs shipped here are placeholders**
-  (`"REPLACE_ME_MUSIC_1"` etc.) — deliberately obvious fakes rather than
-  guessed-at real-looking IDs, so it's unmistakable what still needs
-  populating. The file's doc comment walks through finding a real ID,
-  confirming it allows embedding, and why "watch the whole video yourself
-  first" isn't optional busywork — this puts a specific video in front of
-  a specific person's eyes for up to a minute.
-- **Graceful fallback**: if a category's list is still placeholder IDs, or
-  the real player errors (no network, embedding disabled, video pulled),
+- **`StimulusDataset.kt`** (`domain/dataset/`) is the curated stimulus
+  library the PID calls for: 38 hand-verified clips across the nine
+  canonical categories, each a `Stimulus` record with a stable id, a media
+  identifier, and a per-clip duration cap. Nothing is searched for at
+  runtime — a clip that isn't in that file cannot be shown. Selection among
+  a category's clips is random per session; the dataset itself is fixed.
+  `StimulusDatasetValidator` checks it (all nine categories present, unique
+  ids, well-formed media ids, sane caps, resolvable trait clusters) and
+  reports problems instead of throwing; rows with structural errors are
+  withheld from the session, and thin categories or unreviewed titles are
+  reported as warnings. The file's doc comment walks through adding a clip
+  and why "watch the whole video yourself first" isn't optional busywork —
+  this puts a specific video in front of a specific person's eyes for up
+  to a minute.
+- **Graceful fallback**: if a category has no valid stimulus, or the real
+  player errors (no network, embedding disabled, video pulled),
   `AttentionAssessmentScreen` automatically falls back to the original
   `VideoPlayerCard` gradient placeholder rather than showing a broken
   player — the assessment loop still completes end to end either way.
@@ -451,14 +457,17 @@ themed gradient placeholder:
 
 ### Content curation is still entirely manual, and that's intentional
 
-`CategoryVideoLibrary.kt`'s doc comment repeats the concern already flagged
-in `AttentionCategory.kt`: Horror, Sad, Melodrama, and Romance need real
+`StimulusDataset.kt`'s doc comment repeats the concern already flagged
+in `AttentionCategory.kt`: Horror, Sadness, Melodrama, and Romance need real
 editorial judgment given the app's stated 5-30 age range. This integration
 deliberately does **not** pull from YouTube's search/recommendation API —
 every video that plays here should be one a human specifically chose and
-watched, not one an algorithm surfaced. Consider filtering which categories
-are even offered based on `UserPreferences.getAge()` before wiring this up
-for real users.
+watched, not one an algorithm surfaced. Age-appropriate filtering of the
+categories is **not implemented**, and the approved PID records that as a
+known limitation of the current build (all nine categories are offered to
+every user regardless of age). Adding a filter on `UserPreferences.getAge()`
+is a candidate enhancement for the next iteration, not a missing piece of
+the approved scope.
 
 ### Setup addition
 

@@ -32,8 +32,8 @@ data class AssessmentSessionState(
  *  - on maintained attention: holds the gaze metrics until the user submits
  *    their 1-5 ratings, then counts it as successful
  *  - stops at 5 successful assessments, or earlier if categories run out
- *    (EXHAUSTED — the UI should handle this gracefully rather than crash;
- *    see the TODO in AssessmentNavGraph)
+ *    (EXHAUSTED — handled alongside COMPLETE in AssessmentNavGraph, which
+ *    saves whatever was measured and routes to results rather than crashing)
  *
  * Scoped to the assessment nested nav graph (shared across its three
  * screens via `viewModel(parentEntry)`), so state survives navigating

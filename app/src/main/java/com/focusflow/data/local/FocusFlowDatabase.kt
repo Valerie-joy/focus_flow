@@ -40,7 +40,7 @@ abstract class FocusFlowDatabase : RoomDatabase() {
                     // assessment_history.category to the canonical categoryId
                     // and adds the component sub-scores, capture-quality and
                     // analysis-frame-rate columns).
-                    .fallbackToDestructiveMigration()
+                    .fallbackToDestructiveMigration(dropAllTables = true)
                     .build().also { INSTANCE = it }
             }
     }

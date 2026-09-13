@@ -32,8 +32,8 @@ import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTube
  * the assessment screen's visual language doesn't change, just what's
  * actually playing underneath.
  *
- * @param videoId a YouTube video ID (see CategoryVideoLibrary.kt for where
- * these come from and how to vet one)
+ * @param videoId a YouTube video ID — always a [Stimulus.mediaId] from the
+ * curated StimulusDataset (see that file for how to vet and add one)
  * @param onVideoEnded fires when YouTube reports the video reached its
  * natural end (PlayerConstants.PlayerState.ENDED) — the assessment screen
  * uses this instead of a hardcoded timer where possible.

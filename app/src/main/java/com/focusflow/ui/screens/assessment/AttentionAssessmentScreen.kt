@@ -79,7 +79,7 @@ import kotlin.math.min
  * 1. A short "position yourself" setup step showing the front-camera preview
  *    with a live iris/eye overlay, so the user can confirm tracking is working
  *    before anything is measured.
- * 2. Playback: the per-category YouTube video (see CategoryVideoLibrary.kt)
+ * 2. Playback: the per-category clip from the curated [StimulusDataset]
  *    plays while a camera stream feeds [GazeAnalyzer] into an [AttentionTracker].
  *    A small corner self-view (PiP-style) is shown so the user has a visual
  *    confirmation the camera is active, sized and positioned to stay

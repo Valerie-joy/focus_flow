@@ -37,7 +37,7 @@ in practice — just follow the steps below in order.
 | File | Why it's needed |
 |---|---|
 | `settings.gradle.kts`, `build.gradle.kts` (root) | Declares the project + plugin versions |
-| `app/build.gradle.kts` | Every dependency from all 10 stages (Compose, Navigation, CameraX, ML Kit, Room) — this is the file the README's "Setup" section was describing piece by piece; it's now assembled in one place |
+| `app/build.gradle.kts` | Every dependency from all 10 stages (Compose, Navigation, CameraX, MediaPipe Face Landmarker, LiteRT, Room, Supabase) — this is the file the README's "Setup" section was describing piece by piece; it's now assembled in one place |
 | `app/src/main/AndroidManifest.xml` | Camera permission, legacy storage permission, the `FileProvider` entry Stage 9's PDF/email export needs, and the app's entry point |
 | `app/src/main/java/com/focusflow/MainActivity.kt` | **This didn't exist before** — it's the actual entry point: installs `FocusFlowTheme` and wires all 5 nav graphs (`authGraph`, `onboardingGraph`, `registrationGraph`, `assessmentGraph`, `profileGraph`) into one `NavHost`. Without this, there was nothing telling Android what screen to show first. |
 | `res/values/strings.xml`, `themes.xml` | App name + a base XML theme the manifest requires (Compose's `FocusFlowTheme` handles the actual in-app look) |
