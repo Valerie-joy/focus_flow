@@ -370,6 +370,22 @@ Since 2026-09 the app can estimate **where on the screen** the user is
 looking, not only whether their eyes are deflected. This closes the
 "no calibrated point-of-regard" limitation stated in the PID and manuscript.
 
+**This is a post-PID enhancement, and the approved PID does not yet reflect
+it.** The PID as approved places calibrated point-of-regard *explicitly out
+of scope* (§1.7: "the system is not calibrated per user and cannot determine
+where on the screen the user is looking"), restates that under Constraints,
+and defines *Gaze Deviation* (§3.1) in deflection-only terms. Those three
+passages now describe a system this build no longer is. Until the PID is
+revised, present the iTracker path as an enhancement added after PID
+approval rather than as part of the approved scope, and add the citation
+below to the PID and manuscript — the licence requires it in "any work made
+public, whatever the form". Full obligations: `THIRD_PARTY_NOTICES.md`.
+
+The deflection-only pipeline the PID *does* describe remains intact and is
+the automatic fallback whenever the model is absent, calibration is skipped,
+or the calibration fit is out of tolerance — so the approved behaviour is
+still exactly what the app does in those cases.
+
 **Model.** iTracker from *Eye Tracking for Everyone* (Krafka et al., CVPR
 2016), the released GazeCapture PyTorch checkpoint exported to
 `app/src/main/assets/itracker.tflite` (13.5 MB, float16 weights) by
