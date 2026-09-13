@@ -222,11 +222,16 @@ class PdfReportGenerator(private val context: Context) {
                 "diagnose, screen for, or classify ADHD or any other condition, and it does not " +
                 "prescribe or alter treatment. It is intended to inform, not replace, " +
                 "professional judgement.",
+            // Worded to hold in both gaze modes: the point-of-regard estimator
+            // attaches only when the user's calibration fit is good enough, and
+            // the app otherwise runs on gaze deflection and head pose alone.
             "Scores describe how the user's attention behaved while watching short clips from " +
-                "nine content categories. The system measures gaze deflection and head " +
-                "orientation; it is not calibrated per user and cannot determine where on the " +
-                "screen someone was looking. Component weights are a stated design prior rather " +
-                "than empirically calibrated values.",
+                "nine content categories. Attention is estimated from the front camera using " +
+                "eye-gaze deflection and head orientation and, where the user completed a " +
+                "short on-device gaze calibration, an approximate estimate of screen position. " +
+                "This is not a clinical-grade eye tracker: screen-position estimates are " +
+                "approximate (centimetre-level at best), and component weights are a stated " +
+                "design prior rather than empirically calibrated values.",
             "Privacy: camera frames were processed on the device and discarded immediately. No " +
                 "image, facial landmark or per-frame gaze data was stored or transmitted, and " +
                 "none appears in this report — only derived numerical metrics."

@@ -4,12 +4,12 @@ package com.focusflow.camera.eyetracking
  * The result of the camera setup step: the user's neutral, screen-facing head
  * orientation, captured once acquisition is stable.
  *
- * This is a *baseline*, not a per-user gaze-point fit. The PID is explicit
- * that the system measures gaze deflection rather than calibrated
- * point-of-regard, and this does not change that: it records what "facing the
- * screen" looks like for this person in this sitting position, so later head
- * yaw/pitch can be judged relative to their neutral rather than to an assumed
- * zero.
+ * This is a *head-pose baseline*, not a gaze-point fit: it records what
+ * "facing the screen" looks like for this person in this sitting position, so
+ * later head yaw/pitch can be judged relative to their neutral rather than to
+ * an assumed zero. It is independent of the optional iTracker point-of-regard
+ * calibration (see [com.focusflow.camera.eyetracking.itracker.GazeCalibration]),
+ * which fits screen coordinates and is gated separately on its own residual.
  */
 data class CalibrationBaseline(
     val baselineYawDegrees: Float,
