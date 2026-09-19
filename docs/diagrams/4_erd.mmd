@@ -1,0 +1,92 @@
+%%{init: {'theme':'neutral'}}%%
+erDiagram
+  %% ===== REMOTE — Supabase (managed backend) =====
+  AUTH_USER {
+    uuid id PK "Supabase auth"
+    string email
+  }
+  PROFILE {
+    uuid id PK "= auth user id"
+    string full_name
+    int age
+    string sex
+    string email
+    boolean onboarding_completed
+  }
+  DIAGNOSIS_DOCUMENT {
+    string path PK "adhd-documents/{user_id}/{file}"
+    uuid user_id FK
+    blob content "private bucket, RLS"
+  }
+
+  %% ===== LOCAL — Room (focusflow.db) =====
+  ASSESSMENT_HISTORY {
+    long id PK
+    string session_id "groups one run"
+    long timestamp_ms
+    string category_id FK "canonical id"
+    int score "0-100"
+    boolean successful
+    boolean skipped
+    int skip_count
+    int interest_rating "1-5, nullable"
+    int focus_rating "1-5, nullable"
+    int screen_attention_score
+    int distraction_delay_score
+    int gaze_stability_score
+    int blink_consistency_score
+    float screen_attention_percentage
+    int gaze_shift_count
+    int blink_count
+    long first_distraction_ms "nullable"
+    long actual_duration_ms
+    float analysis_frame_rate "logged per session"
+    int analyzed_frame_count
+    string quality_flags
+  }
+  ADHD_SELF_REPORT {
+    long id PK
+    long timestamp_ms
+    string answers_json
+  }
+
+  %% ===== STATIC DATASET — compiled into the app =====
+  ATTENTION_CATEGORY {
+    string id PK "music, gaming, ... romance"
+    string display_name
+  }
+  STIMULUS {
+    string id PK "e.g. science_fiction_01"
+    string category_id FK
+    string title
+    string media_id "manually verified"
+    int duration_limit_seconds
+    boolean title_verified
+  }
+  TRAIT_CLUSTER {
+    string name PK "auditory, visual, interactive, narrative, textual"
+  }
+  CATEGORY_TRAIT_WEIGHT {
+    string category_id FK
+    string cluster FK
+    float weight "shares sum to 1.0"
+  }
+
+  %% ===== DERIVED AT RUNTIME (not persisted as a table) =====
+  RECOMMENDATION_PROFILE {
+    string learning_style "auditory|visual|interactive|narrative|structured|multimodal"
+    string best_categories
+    int attention_strength
+    boolean is_provisional "fewer than 5 successful"
+    string study_techniques
+    string content_formats
+    string weekly_goals
+  }
+
+  AUTH_USER ||--|| PROFILE : "owns"
+  AUTH_USER ||--o| DIAGNOSIS_DOCUMENT : "optionally uploads"
+  ATTENTION_CATEGORY ||--|{ STIMULUS : "contains"
+  ATTENTION_CATEGORY ||--|{ CATEGORY_TRAIT_WEIGHT : "maps to"
+  TRAIT_CLUSTER ||--o{ CATEGORY_TRAIT_WEIGHT : "weighted in"
+  ATTENTION_CATEGORY ||--o{ ASSESSMENT_HISTORY : "scored in"
+  ASSESSMENT_HISTORY }o--|| RECOMMENDATION_PROFILE : "session rows derive"

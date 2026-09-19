@@ -1,0 +1,86 @@
+%%{init: {'theme':'neutral','sequence':{'mirrorActors':false,'messageFontSize':13,'actorFontSize':14,'width':170}}}%%
+sequenceDiagram
+  autonumber
+  actor U as User
+  participant UI as FocusFlow UI<br/>(Compose screens)
+  participant SB as Supabase<br/>(Auth · Profile · Storage)
+  participant CAM as CameraX<br/>ImageAnalysis
+  participant GA as GazeAnalyzer<br/>(MediaPipe Face Landmarker)
+  participant AT as AttentionTracker
+  participant VM as AssessmentViewModel
+  participant SC as Scoring &<br/>Recommendation
+  participant DB as Room<br/>(assessment_history)
+  participant PDF as PdfReportGenerator
+
+  rect rgb(245,245,245)
+  note over U,SB: Onboarding
+  U->>UI: Sign in (email / Google)
+  UI->>SB: authenticate
+  SB-->>UI: session
+  UI->>SB: upsert profile record
+  opt has existing diagnosis
+    UI->>SB: upload document to private bucket
+  end
+  end
+
+  rect rgb(255,250,230)
+  note over U,AT: Camera setup / calibration (CalibrationGate)
+  UI->>CAM: bind front camera
+  loop every frame
+    CAM->>GA: ImageProxy (in memory)
+    GA-->>UI: GazeFrame: face, 10 iris pts, yaw, pitch
+    UI->>UI: CalibrationGate.accept()
+  end
+  UI-->>U: READY after 15 consecutive stable frames<br/>(baseline yaw / pitch captured)
+  end
+
+  rect rgb(235,245,255)
+  note over U,DB: Assessment session — repeats until 5 successful assessments
+  VM->>VM: shuffle playable categories<br/>(StimulusDatasetValidator.validRecords)
+  loop per category
+    UI->>UI: StimulusDataset.selectFor(category)
+    UI->>CAM: play clip, bind analysis
+    loop every frame (on-device, discarded)
+      CAM->>GA: ImageProxy
+      GA->>GA: 478 landmarks, blendshapes,<br/>head yaw/pitch → isLookingAtScreen
+      GA->>AT: recordFrame(face, looking, eyesClosed, t)
+      AT->>AT: screen-attention %, gaze shifts,<br/>blinks, first sustained lapse,<br/>rolling-window ratio
+    end
+    alt clip completes, attention maintained
+      UI->>VM: onAttentionMaintained(metrics)
+      UI-->>U: post-clip ratings
+      U->>UI: interest (1–5), focus (1–5)
+      UI->>VM: submitRating() → successful +1
+    else sustained attention drop
+      AT-->>UI: attentionDroppedSustained
+      UI->>VM: onAttentionShifted(metrics) → not successful
+      VM->>VM: next category
+    else user skips
+      UI->>VM: skipCategory()
+      VM->>VM: 1st skip → requeue · 2nd skip → retire
+    end
+    alt 5 successful
+      VM-->>UI: COMPLETE
+    else pool exhausted
+      VM-->>UI: EXHAUSTED (graceful)
+    end
+  end
+  end
+
+  rect rgb(240,255,240)
+  note over UI,DB: Profile
+  UI->>SC: CalculateAttentionScoreUseCase.scoreAll(results)
+  SC->>SC: 6-component weighted score,<br/>redistribute missing self-report weight
+  UI->>SC: GenerateRecommendationsUseCase(scored)
+  SC->>SC: rank · trait-cluster weights ·<br/>learning style · techniques · goals
+  UI->>DB: saveSession(scored)<br/>derived metrics only
+  UI-->>U: results, learning style, recommendations
+  end
+
+  rect rgb(255,240,240)
+  note over U,PDF: Report
+  U->>UI: download / email report
+  UI->>DB: observeHistory()
+  UI->>PDF: generate(ReportContent)
+  PDF-->>U: PDF (ranking, style, techniques,<br/>goals, provisional flag, non-diagnostic notice)
+  end

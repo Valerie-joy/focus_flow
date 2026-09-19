@@ -1,0 +1,45 @@
+%%{init: {'theme':'neutral','flowchart':{'nodeSpacing':25,'rankSpacing':40}}}%%
+flowchart TB
+  S((Start)) --> OPEN[Open application]
+  OPEN --> REG{Registered?}
+  REG -->|No| SIGNUP[Register / sign in<br/>Complete profile<br/>Optional diagnosis document<br/>or self-reflection questionnaire]
+  SIGNUP --> OPEN
+  REG -->|Yes| PERM[Grant camera permission]
+  PERM --> CAL[Camera setup:<br/>face + both irises detected]
+  CAL --> STABLE{15 consecutive<br/>stable frames?}
+  STABLE -->|No| CAL
+  STABLE -->|Yes| BASE[Baseline head orientation captured]
+  BASE --> SHUF[Randomize category order<br/>from valid stimulus dataset]
+  SHUF --> NEXT{Category<br/>available?}
+  NEXT -->|No| EXH[Session exhausted —<br/>end gracefully with<br/>whatever was measured]
+  NEXT -->|Yes| PLAY[Play curated clip<br/>per-clip duration cap]
+  PLAY --> TRACK[Track attention on-device:<br/>gaze deflection + head pose per frame<br/>screen-attention %, gaze shifts,<br/>blinks, first sustained lapse]
+  TRACK --> OUTCOME{Outcome}
+  OUTCOME -->|Sustained attention drop| SHIFT[Clip ends early<br/>Category marked unsuccessful]
+  SHIFT --> NEXT
+  OUTCOME -->|User skips| SKIPN{Second skip of<br/>this category?}
+  SKIPN -->|No| REQ[Requeue category<br/>to end of order]
+  REQ --> NEXT
+  SKIPN -->|Yes| RET[Retire category<br/>record as skipped]
+  RET --> NEXT
+  OUTCOME -->|Clip completes,<br/>attention maintained| RATE[Post-clip self-ratings:<br/>interest 1–5, focus 1–5]
+  RATE --> SUCC[Successful assessment +1]
+  SUCC --> FIVE{5 successful?}
+  FIVE -->|No| NEXT
+  FIVE -->|Yes| SCORE[Compute per-category<br/>attention score 0–100]
+  EXH --> SCORE
+  SCORE --> RANK[Rank categories]
+  RANK --> TRAIT[Aggregate trait clusters<br/>of strongest categories]
+  TRAIT --> LS[Infer learning style]
+  LS --> REC[Generate study techniques,<br/>content formats, weekly goals]
+  REC --> SAVE[(Save derived metrics<br/>locally — Room)]
+  SAVE --> SHOW[Show results, learning style,<br/>recommendations, progress]
+  SHOW --> CHOICE{Next}
+  CHOICE -->|Export| PDF[Generate PDF report<br/>download or email]
+  CHOICE -->|New session| SHUF
+  CHOICE -->|Done| E(((End)))
+  PDF --> E
+
+  classDef term fill:#dbe5f1,stroke:#1f497d
+  classDef bad fill:#fde9d9,stroke:#c0504d
+  class SHIFT,RET,EXH bad
