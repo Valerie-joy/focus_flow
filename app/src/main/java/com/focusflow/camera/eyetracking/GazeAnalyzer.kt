@@ -380,8 +380,13 @@ class GazeAnalyzer(
                     landmarkYs[i] = landmarks[i].y() * h
                 }
                 val inputs = prep.prepare(upright, landmarkXs, landmarkYs)
-                gazeCm = estimator.estimate(inputs)
-                inferenceMs = estimator.lastInferenceMs
+                // Null means the estimator was closed under us mid-clip; leave
+                // inferenceMs unset so the skip backs off instead of reusing a
+                // stale timing from the previous frame.
+                estimator.estimate(inputs)?.let { point ->
+                    gazeCm = point
+                    inferenceMs = estimator.lastInferenceMs
+                }
             }.onFailure { Log.w(TAG, "iTracker inference failed on this frame", it) }
 
             // Adaptive skip: keep the amortised cost under budget. A failed

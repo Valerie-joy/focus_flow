@@ -23,12 +23,24 @@ import java.nio.channels.FileChannel
  *
  * CPU only, four threads through XNNPACK. The GPU delegate has no LRN kernel
  * (iTracker has six), so it would partition the graph and end up slower.
- * Not thread-safe; call [estimate] from the single analysis thread.
+ *
+ * [estimate] is meant to be called from the single analysis thread, but
+ * [close] arrives from another one — Compose disposes the analyzer on the main
+ * thread when the clip ends or the user navigates away. Closing the
+ * interpreter while a run is in flight frees the native handle underneath it,
+ * and TFLite then dereferences freed memory: a SIGSEGV that kills the process
+ * outright, with no Kotlin exception for the caller's runCatching to see.
+ * Both methods therefore take [lock], and [closed] stops any run starting
+ * afterwards, so close waits for at most the one inference already running.
  */
 class GazePointEstimator(context: Context) : AutoCloseable {
     private val interpreter: Interpreter
     private val inputIndex: IntArray   // [face, eyeLeft, eyeRight, faceGrid] -> tensor index
     private val output = Array(1) { FloatArray(2) }
+    private val lock = Any()
+
+    @Volatile
+    private var closed = false
 
     /** Wall time of the most recent [estimate] call. */
     var lastInferenceMs: Float = 0f
@@ -54,7 +66,10 @@ class GazePointEstimator(context: Context) : AutoCloseable {
         Log.i(TAG, "iTracker loaded: ${interpreter.inputTensorCount} inputs, $THREADS threads")
     }
 
-    fun estimate(inputs: ITrackerPreprocessor.Inputs): GazePointCm {
+    /** Returns null once [close] has run, so a late frame is dropped rather than crashing. */
+    fun estimate(inputs: ITrackerPreprocessor.Inputs): GazePointCm? = synchronized(lock) {
+        if (closed) return null
+
         val feed = arrayOfNulls<Any>(INPUT_NAMES.size)
         feed[inputIndex[0]] = inputs.face
         feed[inputIndex[1]] = inputs.eyeLeft
@@ -71,8 +86,11 @@ class GazePointEstimator(context: Context) : AutoCloseable {
         return GazePointCm(output[0][0], output[0][1])
     }
 
-    override fun close() {
+    override fun close() = synchronized(lock) {
+        if (closed) return
+        closed = true
         runCatching { interpreter.close() }
+        Unit
     }
 
     private fun mapAsset(context: Context, name: String): MappedByteBuffer =
