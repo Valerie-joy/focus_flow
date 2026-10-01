@@ -9,6 +9,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -27,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import com.focusflow.ui.components.BlurBackground
 import com.focusflow.ui.components.PrimaryButton
 import com.focusflow.ui.theme.FocusFlowTheme
+import com.focusflow.ui.theme.Spacing
+import com.focusflow.ui.theme.Sizing
 
 /**
  * Shown when AttentionTracker flags a sustained drop below threshold.
@@ -38,7 +44,15 @@ import com.focusflow.ui.theme.FocusFlowTheme
 fun AttentionShiftedScreen(onContinue: () -> Unit) {
     BlurBackground(modifier = Modifier.fillMaxSize()) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .widthIn(max = Sizing.maxContentWidth)
+                // Without a scroll container this screen's heading, explanation
+                // and button overflowed the viewport at large font scales, with
+                // the button the part that went missing.
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+                .padding(horizontal = Spacing.xl),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
