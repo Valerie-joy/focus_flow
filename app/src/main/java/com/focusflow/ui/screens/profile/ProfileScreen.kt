@@ -9,20 +9,23 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -36,17 +39,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.focusflow.ui.components.BlurBackground
+import com.focusflow.R
 import com.focusflow.ui.components.GlassCard
 import com.focusflow.ui.components.PremiumDialog
 import com.focusflow.ui.components.PrimaryButton
 import com.focusflow.ui.components.SettingsRow
 import com.focusflow.ui.theme.FocusFlowTheme
 import com.focusflow.ui.theme.LocalFocusFlowColors
+import com.focusflow.ui.theme.Sizing
+import com.focusflow.ui.theme.Spacing
 
 @Composable
 fun ProfileScreen(
@@ -61,22 +68,29 @@ fun ProfileScreen(
     onNotifications: () -> Unit,
     onPrivacy: () -> Unit,
     onHelpSupport: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    modifier: Modifier = Modifier,
+    isSigningOut: Boolean = false
 ) {
     var showLogoutConfirm by remember { mutableStateOf(false) }
     val systemDark = isSystemInDarkTheme()
 
-    BlurBackground(modifier = Modifier.fillMaxSize()) {
+    BlurBackground(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .widthIn(max = Sizing.maxContentWidth)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp)
+                .navigationBarsPadding()
+                .padding(horizontal = Spacing.gutter)
         ) {
             Spacer(modifier = Modifier.height(12.dp))
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) {
-                    Icon(imageVector = Icons.Filled.ArrowBack, contentDescription = "Back")
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Go back"
+                    )
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
@@ -120,7 +134,7 @@ fun ProfileScreen(
                         onClick = onNotifications
                     )
                     SettingsRow(
-                        icon = Icons.Filled.HelpOutline,
+                        icon = Icons.AutoMirrored.Filled.HelpOutline,
                         label = "Help & Support",
                         onClick = onHelpSupport
                     )
@@ -143,29 +157,39 @@ fun ProfileScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(Spacing.xl))
+            // Separated from the settings rows above by a divider and a label:
+            // sign-out is the one irreversible action on this screen, and it sat
+            // flush against the ordinary navigation rows.
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant,
+                thickness = Sizing.hairline
+            )
+            Spacer(modifier = Modifier.height(Spacing.md))
             PrimaryButton(
                 text = "Log out",
                 onClick = { showLogoutConfirm = true },
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                contentColor = MaterialTheme.colorScheme.error,
-                modifier = Modifier.fillMaxWidth()
+                loading = isSigningOut,
+                loadingContentDescription = "Signing out",
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = MaterialTheme.colorScheme.error
             )
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(Spacing.xl))
         }
     }
 
     if (showLogoutConfirm) {
         PremiumDialog(
             title = "Log out?",
-            message = "You'll need to sign in again to continue tracking your attention.",
+            message = "You'll need to sign in again to continue. Assessments already saved " +
+                "on this device stay in your history.",
             onDismiss = { showLogoutConfirm = false },
             primaryActionLabel = "Log out",
             onPrimaryAction = {
                 showLogoutConfirm = false
                 onLogout()
             },
-            secondaryActionLabel = "Cancel",
+            secondaryActionLabel = stringResource(R.string.action_cancel),
             onSecondaryAction = { showLogoutConfirm = false }
         )
     }

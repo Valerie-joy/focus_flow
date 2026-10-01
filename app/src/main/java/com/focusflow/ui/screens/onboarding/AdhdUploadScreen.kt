@@ -16,6 +16,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,9 +47,12 @@ import androidx.compose.ui.unit.dp
 import com.focusflow.ui.components.BlurBackground
 import com.focusflow.ui.components.GlassCard
 import com.focusflow.ui.components.PremiumDialog
+import com.focusflow.data.repository.PickedDocument
 import com.focusflow.ui.components.PrimaryButton
 import com.focusflow.ui.theme.FocusFlowRadius
 import com.focusflow.ui.theme.FocusFlowTheme
+import com.focusflow.ui.theme.Spacing
+import com.focusflow.ui.theme.Sizing
 import com.focusflow.ui.theme.LocalFocusFlowColors
 import com.focusflow.ui.theme.Success
 
@@ -72,12 +79,26 @@ fun AdhdUploadScreen(
     onDismissError: () -> Unit,
     onRetry: () -> Unit
 ) {
+    // OpenDocument with an explicit MIME list, rather than GetContent("*/*").
+    // The screen says "PDF, PNG, or JPEG" while the picker offered every file
+    // on the device, so the first chance to learn a file was unsupported came
+    // after picking it. Now unsupported files are not offered at all.
     val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? -> uri?.let(onFileSelected) }
 
     BlurBackground(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .widthIn(max = Sizing.maxContentWidth)
+                // Previously fillMaxSize with a weighted spacer and no scroll:
+                // at large font scales the drop zone and its copy consumed the
+                // viewport and pushed Continue off the bottom, unreachable.
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+                .padding(horizontal = Spacing.gutter)
+        ) {
             Spacer(modifier = Modifier.height(24.dp))
             Text(
                 text = "Upload your diagnosis",
@@ -95,10 +116,10 @@ fun AdhdUploadScreen(
 
             UploadDropZone(
                 uploadState = uploadState,
-                onTap = { launcher.launch("*/*") }
+                onTap = { launcher.launch(PickedDocument.ACCEPTED_MIME_TYPES) }
             )
 
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(Spacing.xl))
 
             PrimaryButton(
                 text = "Continue",
@@ -128,14 +149,19 @@ private fun UploadDropZone(uploadState: UploadState, onTap: () -> Unit) {
     GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 160.dp)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                enabled = uploadState !is UploadState.Validating,
-                onClick = onTap
-            ),
-        blurBehind = false
+            .defaultMinSize(minHeight = 160.dp),
+        // A real clickable card: ripple, button role for TalkBack and a
+        // minimum touch target, none of which the previous
+        // clickable(indication = null) provided. Tapping is disabled while an
+        // upload is in flight so a second pick can't race the first.
+        onClick = if (uploadState is UploadState.Validating) null else onTap,
+        contentDescription = when (uploadState) {
+            is UploadState.Idle -> "Choose a document. PDF, PNG or JPEG."
+            is UploadState.Selected -> "Selected ${uploadState.fileName}. Tap to choose a different file."
+            is UploadState.Validating -> "Uploading your document"
+            is UploadState.Valid -> "Document accepted"
+            is UploadState.Invalid -> "Document not accepted. Tap to choose another file."
+        }
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),

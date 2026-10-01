@@ -1,9 +1,6 @@
 package com.focusflow.ui.screens.auth
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,141 +10,163 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.focusflow.ui.components.BlurBackground
-import com.focusflow.ui.components.GradientButton
 import com.focusflow.ui.components.PrimaryButton
-import com.focusflow.ui.theme.FocusFlowRadius
+import com.focusflow.ui.components.SecondaryButton
 import com.focusflow.ui.theme.FocusFlowTheme
-import com.focusflow.ui.theme.LocalFocusFlowColors
+import com.focusflow.ui.theme.Sizing
+import com.focusflow.ui.theme.Spacing
 
+/**
+ * The unauthenticated landing screen.
+ *
+ * Three fixes here, all of them things a user would hit:
+ *
+ *  - **"Continue with Apple" did nothing.** It was wired to an empty lambda
+ *    (`onContinueWithApple = { /* out of scope */ }`) — Apple sign-in needs an
+ *    Apple Developer account and a Services ID that this project does not have.
+ *    A visible button that silently swallows the tap is worse than no button,
+ *    so both it and its parameter are gone. Re-adding it means adding an
+ *    `onContinueWithApple` parameter here and a real implementation behind it,
+ *    the same shape as the Google path.
+ *  - **Google sign-in had no loading state.** Fetching a credential opens a
+ *    system sheet after a round trip; until it appeared, the screen looked
+ *    unresponsive and invited a second tap.
+ *  - **The screen could not scroll.** `Arrangement.Bottom` with a weighted
+ *    spacer meant that at large font scales the heading and the legal line
+ *    pushed the buttons off the top and bottom respectively, with no way to
+ *    reach them.
+ */
 @Composable
 fun WelcomeScreen(
     onLogIn: () -> Unit,
     onCreateAccount: () -> Unit,
     onContinueWithGoogle: () -> Unit,
-    onContinueWithApple: () -> Unit
+    modifier: Modifier = Modifier,
+    isGoogleSignInLoading: Boolean = false
 ) {
-    BlurBackground(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 28.dp),
-            verticalArrangement = Arrangement.Bottom
-        ) {
-            Spacer(modifier = Modifier.weight(1f))
+    BlurBackground(modifier = modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .widthIn(max = Sizing.maxContentWidth)
+                    .verticalScroll(rememberScrollState())
+                    .navigationBarsPadding()
+                    .padding(horizontal = Spacing.gutter),
+                verticalArrangement = Arrangement.Bottom
+            ) {
+                Spacer(modifier = Modifier.weight(1f))
 
-            Text(
-                text = "Welcome to",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = "FocusFlow",
-                style = MaterialTheme.typography.displayLarge,
-                fontWeight = FontWeight.Light,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = "Discover what truly captures your attention.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(36.dp))
-
-            GradientButton(text = "Log In", onClick = onLogIn)
-            Spacer(modifier = Modifier.height(12.dp))
-            PrimaryButton(
-                text = "Create account",
-                onClick = onCreateAccount,
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                contentColor = MaterialTheme.colorScheme.onSurface
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Divider()
                 Text(
-                    text = "  or  ",
-                    style = MaterialTheme.typography.bodySmall,
+                    text = "Welcome to",
+                    style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Divider()
+                Text(
+                    text = "FocusFlow",
+                    style = MaterialTheme.typography.displayMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.semantics { heading() }
+                )
+                Spacer(modifier = Modifier.height(Spacing.xs))
+                Text(
+                    // Says what the app does rather than only how it feels — this
+                    // is the first thing a new user reads.
+                    text = "See what holds your attention. Watch a few short clips while " +
+                        "your phone's front camera follows where your eyes go.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(Spacing.xxl))
+
+                PrimaryButton(
+                    text = "Log in",
+                    onClick = onLogIn,
+                    enabled = !isGoogleSignInLoading
+                )
+                Spacer(modifier = Modifier.height(Spacing.xs))
+                SecondaryButton(
+                    text = "Create account",
+                    onClick = onCreateAccount,
+                    enabled = !isGoogleSignInLoading
+                )
+
+                Spacer(modifier = Modifier.height(Spacing.md))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    HairlineDivider()
+                    Text(
+                        text = "  or  ",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    HairlineDivider()
+                }
+                Spacer(modifier = Modifier.height(Spacing.md))
+
+                SecondaryButton(
+                    text = "Continue with Google",
+                    onClick = onContinueWithGoogle,
+                    loading = isGoogleSignInLoading
+                )
+
+                Spacer(modifier = Modifier.height(Spacing.md))
+                Text(
+                    text = "By continuing, you agree to our Terms of Service and Privacy Policy.",
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(Spacing.xl))
             }
-            Spacer(modifier = Modifier.height(20.dp))
-
-            SocialSignInButton(label = "Continue with Google", onClick = onContinueWithGoogle)
-            Spacer(modifier = Modifier.height(12.dp))
-            SocialSignInButton(label = "Continue with Apple", onClick = onContinueWithApple)
-
-            Spacer(modifier = Modifier.height(20.dp))
-            Text(
-                text = "By continuing, you agree to our Terms of Service and Privacy Policy.",
-                style = MaterialTheme.typography.bodySmall,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(28.dp))
         }
     }
 }
 
 @Composable
-private fun RowScope.Divider() {
+private fun RowScope.HairlineDivider() {
     Box(
         modifier = Modifier
             .weight(1f)
-            .height(1.dp)
-            .background(LocalFocusFlowColors.current.glassBorder)
+            .height(Sizing.hairline)
+            .background(MaterialTheme.colorScheme.outlineVariant)
     )
 }
 
-@Composable
-private fun SocialSignInButton(label: String, onClick: () -> Unit) {
-    val colors = LocalFocusFlowColors.current
-    val shape = RoundedCornerShape(FocusFlowRadius.pill)
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .clip(shape)
-            .background(colors.glassSurface)
-            .border(width = 1.dp, color = colors.glassBorder, shape = shape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-    }
-}
-
-@Preview(showBackground = true)
+@Preview(showBackground = true, name = "Welcome")
 @Composable
 private fun WelcomeScreenPreview() {
     FocusFlowTheme {
-        WelcomeScreen(onLogIn = {}, onCreateAccount = {}, onContinueWithGoogle = {}, onContinueWithApple = {})
+        WelcomeScreen(onLogIn = {}, onCreateAccount = {}, onContinueWithGoogle = {})
+    }
+}
+
+@Preview(showBackground = true, name = "Welcome — Google loading, dark")
+@Composable
+private fun WelcomeScreenLoadingPreview() {
+    FocusFlowTheme(darkTheme = true) {
+        WelcomeScreen(
+            onLogIn = {},
+            onCreateAccount = {},
+            onContinueWithGoogle = {},
+            isGoogleSignInLoading = true
+        )
     }
 }

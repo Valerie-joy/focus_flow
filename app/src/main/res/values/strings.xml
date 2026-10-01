@@ -1,4 +1,152 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  User-visible strings.
+
+  Migration is in progress and deliberately partial: this file holds the strings
+  for the screens reworked in the current pass, plus the shared accessibility
+  labels, which are the ones most worth centralising (they are easy to get
+  inconsistent and invisible in review). Screens not yet migrated still hold
+  their copy inline; moving all of them is mechanical work with real regression
+  risk and no user-visible benefit until localisation is actually planned.
+
+  Conventions
+  - Named by screen or component, then by role: <screen>_<role>.
+  - Accessibility labels are suffixed _a11y and describe the *action*, not the
+    icon ("Go back", never "Left arrow").
+  - Parameterised strings use positional %1$s / %1$d with explicit indices, so a
+    translation can reorder them.
+-->
 <resources>
     <string name="app_name">FocusFlow</string>
+
+    <!-- ===================== Shared accessibility ===================== -->
+    <string name="a11y_go_back">Go back</string>
+    <string name="a11y_loading">Loading</string>
+    <string name="a11y_working">Working, please wait</string>
+    <string name="a11y_camera_preview">Your camera preview</string>
+
+    <!-- ===================== Shared actions ===================== -->
+    <string name="action_continue">Continue</string>
+    <string name="action_try_again">Try again</string>
+    <string name="action_not_now">Not now</string>
+    <string name="action_skip_for_now">Skip for now</string>
+    <string name="action_got_it">Got it</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_back">Back</string>
+
+    <!-- ===================== Onboarding progress ===================== -->
+    <string name="onboarding_step_label">Step %1$d of %2$d</string>
+    <string name="onboarding_step_optional">Optional</string>
+    <string name="onboarding_step_a11y">Step %1$d of %2$d: %3$s</string>
+    <string name="onboarding_step_a11y_optional">Step %1$d of %2$d: %3$s. This step is
+        optional.</string>
+
+    <!-- ===================== Background question ===================== -->
+    <string name="background_title">Have you been diagnosed with ADHD?</string>
+    <string name="background_body">This only changes what we ask next. Either answer takes you
+        to the same attention assessment.</string>
+    <string name="background_yes_title">Yes, I have a diagnosis</string>
+    <string name="background_yes_subtitle">Upload a document if you have one to hand</string>
+    <string name="background_no_title">No, or I\'d rather not say</string>
+    <string name="background_no_subtitle">Answer six short questions about your day instead</string>
+    <string name="background_privacy">Your answers stay on this device unless you upload a
+        document.</string>
+
+    <!-- ===================== Self-report questionnaire ===================== -->
+    <string name="selfreport_disclaimer_title">Before you start</string>
+    <string name="selfreport_disclaimer_body">These six questions are a self-reflection
+        prompt, not a test. They cannot diagnose or rule out ADHD, and FocusFlow does not score
+        them against anyone else. If some of them ring true, that is worth raising with a
+        doctor.</string>
+    <string name="selfreport_disclaimer_separate">Your answers here are kept separate from the
+        attention assessment. FocusFlow never combines the two into a single
+        conclusion.</string>
+    <string name="selfreport_disclaimer_continue">I understand, continue</string>
+    <string name="selfreport_question_counter">Question %1$d of %2$d</string>
+    <string name="selfreport_answer_prompt">How often does this apply to you?</string>
+    <string name="selfreport_previous">Previous</string>
+    <string name="selfreport_finish">Finish</string>
+    <string name="selfreport_next">Next</string>
+    <string name="selfreport_exit_title">Leave the questions?</string>
+    <string name="selfreport_exit_body">Your answers so far won\'t be saved. You can take
+        these questions again later from your profile.</string>
+    <string name="selfreport_exit_confirm">Leave</string>
+    <string name="selfreport_exit_dismiss">Keep answering</string>
+
+    <!-- ===================== Profile registration ===================== -->
+    <string name="registration_title">A few details about you</string>
+    <string name="registration_body">Age and sex are stored with your results so the report
+        has context. Nothing here is shared outside your account.</string>
+    <string name="registration_name_label">Full name</string>
+    <string name="registration_name_placeholder">Jordan Lee</string>
+    <string name="registration_age_label">Age</string>
+    <string name="registration_sex_label">Sex</string>
+    <string name="registration_email_label">Email</string>
+    <string name="registration_submit">Save and continue</string>
+    <string name="registration_saving_a11y">Saving your profile</string>
+    <string name="registration_error_sex">Choose an option.</string>
+
+    <!-- ===================== Results ===================== -->
+    <string name="results_title">Your attention profile</string>
+    <string name="results_session_average">Session average</string>
+    <string name="results_by_category">By category</string>
+    <string name="results_by_category_subtitle">How steadily your gaze stayed on each kind of
+        content.</string>
+    <string name="results_how_to_read">How to read this</string>
+    <string name="results_view_full_analysis">View full analysis</string>
+    <string name="results_empty_title">No categories completed</string>
+    <string name="results_empty_body">Watch at least one clip through to see how your
+        attention held up across different kinds of content.</string>
+    <string name="results_a11y_average">Session average %1$d%%, %2$s</string>
+    <!-- A plural, not two strings: languages differ in how many forms they need. -->
+    <plurals name="results_across_categories">
+        <item quantity="one">Across %1$d category</item>
+        <item quantity="other">Across %1$d categories</item>
+    </plurals>
+
+    <!-- ===================== Full analysis ===================== -->
+    <string name="analysis_title">What we measured</string>
+    <string name="analysis_body">Four things were recorded for every clip. None of them is a
+        score on its own — the session average combines them.</string>
+    <string name="analysis_strongest">Where attention held best</string>
+    <string name="analysis_shape">Shape of this session</string>
+    <string name="analysis_shape_subtitle">Each spoke is one category. Further out means your
+        gaze stayed on it more steadily.</string>
+    <string name="analysis_every_category">Every category</string>
+    <string name="analysis_metric_attention">Time on screen</string>
+    <string name="analysis_metric_shifts">Looks away</string>
+    <string name="analysis_metric_first_look">First look away</string>
+    <string name="analysis_metric_blinks">Blinks</string>
+    <string name="analysis_continue">See what this suggests</string>
+    <string name="analysis_empty_title">Nothing measured yet</string>
+    <string name="analysis_empty_body">Complete a clip and the per-category breakdown
+        appears here.</string>
+
+    <!-- ===================== Recommendations ===================== -->
+    <string name="recommendations_eyebrow">Suggestions</string>
+    <string name="recommendations_title">What might work for you</string>
+    <string name="recommendations_basis_title">Why these suggestions</string>
+    <string name="recommendations_group_habits">Study habits</string>
+    <string name="recommendations_group_habits_why">Suited to how you took in %1$s
+        content.</string>
+    <string name="recommendations_group_formats">Formats to try</string>
+    <string name="recommendations_group_formats_why">Drawn from the kinds of content your
+        gaze stayed with.</string>
+    <string name="recommendations_group_goals">This week</string>
+    <string name="recommendations_group_goals_why">Small, specific, and based on your own
+        strongest and weakest categories.</string>
+    <string name="recommendations_style_label">Suggested learning style</string>
+    <string name="recommendations_empty_title">Not enough to go on yet</string>
+    <string name="recommendations_empty_body">Complete at least one category and FocusFlow
+        can suggest formats and habits that match how you watched.</string>
+
+    <!-- ===================== Assessment ===================== -->
+    <string name="assessment_status_tracking">Tracking</string>
+    <string name="assessment_status_eyes_off">Eyes off screen</string>
+    <string name="assessment_status_not_tracking">Not tracking</string>
+    <string name="assessment_a11y_tracking_status">Eye tracking status: %1$s</string>
+    <string name="assessment_time_left">%1$s left</string>
+    <string name="assessment_a11y_clip_progress">Clip progress, %1$d%%</string>
+    <string name="assessment_skip_category">Skip this category</string>
+    <string name="assessment_end_session">End session</string>
 </resources>

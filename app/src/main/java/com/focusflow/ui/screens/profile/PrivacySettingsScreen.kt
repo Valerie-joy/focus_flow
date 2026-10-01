@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material3.Icon
@@ -20,9 +20,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.focusflow.R
 import com.focusflow.ui.components.BlurBackground
 import com.focusflow.ui.components.GlassCard
 import com.focusflow.ui.components.SettingsRow
@@ -45,7 +47,10 @@ fun PrivacySettingsScreen(
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
             Spacer(modifier = Modifier.height(12.dp))
             IconButton(onClick = onBack) {
-                Icon(imageVector = Icons.Filled.ArrowBack, contentDescription = "Back")
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.a11y_go_back)
+                )
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
@@ -89,7 +94,13 @@ fun PrivacySettingsScreen(
                 SettingsRow(
                     icon = Icons.Filled.QueryStats,
                     label = "Anonymized analytics",
-                    subtitle = "Share anonymized usage data to help improve FocusFlow",
+                    // The app ships no analytics SDK and sends nothing anywhere,
+                    // so the old subtitle ("Share anonymized usage data to help
+                    // improve FocusFlow") described a data flow that does not
+                    // exist. Stating the real position is both more accurate and
+                    // more reassuring than implying opt-out telemetry.
+                    subtitle = "Not currently collected. FocusFlow sends no usage data; " +
+                        "this preference is saved for if that ever changes.",
                     trailingContent = {
                         Switch(
                             checked = anonymizedAnalyticsEnabled,

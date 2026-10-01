@@ -47,35 +47,71 @@ class PdfReportGenerator(private val context: Context) {
         var pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
         var page = document.startPage(pageInfo)
         var canvas = page.canvas
-        var y = 48f
+        var y = CONTENT_TOP
 
-        val titlePaint = Paint().apply { textSize = 22f; isFakeBoldText = true; color = 0xFF3B2F3A.toInt() }
-        val sectionPaint = Paint().apply { textSize = 15f; isFakeBoldText = true; color = 0xFFCB6F9C.toInt() }
-        val bodyPaint = Paint().apply { textSize = 12f; color = 0xFF3B2F3A.toInt() }
-        val mutedPaint = Paint().apply { textSize = 11f; color = 0xFF876B82.toInt() }
+        // Colors track the app's palette (see ui/theme/Color.kt) so an
+        // exported report reads as the same product as the screen it came
+        // from. Ink is near-black rather than the app's on-surface color:
+        // this is printed on white paper, where the screen's slightly lifted
+        // text color loses contrast.
+        val titlePaint = Paint().apply { textSize = 21f; isFakeBoldText = true; color = INK }
+        val sectionPaint = Paint().apply { textSize = 13f; isFakeBoldText = true; color = ACCENT }
+        val bodyPaint = Paint().apply { textSize = 11.5f; color = INK }
+        val mutedPaint = Paint().apply { textSize = 10f; color = MUTED_INK }
+        val rulePaint = Paint().apply { strokeWidth = 0.7f; color = RULE }
+        val footerPaint = Paint().apply { textSize = 8.5f; color = MUTED_INK }
+
+        val dateStr = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
+            .format(Date(content.generatedAtMs))
+
+        /**
+         * Draws the running footer, then closes the page. Every page carries
+         * the subject and date, because a report shared as loose pages — which
+         * is what printing it produces — otherwise has pages that identify
+         * nobody.
+         */
+        fun finishPageWithFooter() {
+            canvas.drawLine(MARGIN, FOOTER_Y - 12f, pageWidth - MARGIN, FOOTER_Y - 12f, rulePaint)
+            canvas.drawText("FocusFlow — ${content.userName}, $dateStr", MARGIN, FOOTER_Y, footerPaint)
+            val pageLabel = "Page $pageNumber"
+            canvas.drawText(
+                pageLabel,
+                pageWidth - MARGIN - footerPaint.measureText(pageLabel),
+                FOOTER_Y,
+                footerPaint
+            )
+            document.finishPage(page)
+        }
 
         fun ensureSpace(needed: Float) {
-            if (y + needed > pageHeight - 48f) {
-                document.finishPage(page)
+            if (y + needed > CONTENT_BOTTOM) {
+                finishPageWithFooter()
                 pageNumber++
                 pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
                 page = document.startPage(pageInfo)
                 canvas = page.canvas
-                y = 48f
+                y = CONTENT_TOP
             }
         }
 
-        canvas.drawText("FocusFlow Assessment Report", 48f, y, titlePaint)
+        canvas.drawText("FocusFlow Assessment Report", MARGIN, y, titlePaint)
+        y += 20f
+        canvas.drawText("${content.userName} — $dateStr", MARGIN, y, mutedPaint)
+        y += 10f
+        canvas.drawLine(MARGIN, y, pageWidth - MARGIN, y, rulePaint)
         y += 24f
-        val dateStr = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).format(Date(content.generatedAtMs))
-        canvas.drawText("${content.userName} — $dateStr", 48f, y, mutedPaint)
-        y += 32f
 
         // Helpers for the repeated "heading then indented lines" blocks below.
         fun section(title: String) {
-            ensureSpace(40f)
-            canvas.drawText(title, 48f, y, sectionPaint)
-            y += 20f
+            // Reserve the heading *and* a first line of content, so a heading
+            // can never be orphaned at the foot of a page with its section
+            // starting overleaf.
+            ensureSpace(52f)
+            y += 6f
+            canvas.drawText(title.uppercase(Locale.getDefault()), MARGIN, y, sectionPaint)
+            y += 6f
+            canvas.drawLine(MARGIN, y, pageWidth - MARGIN, y, rulePaint)
+            y += 16f
         }
 
         fun bullets(items: List<String>) {
@@ -115,8 +151,8 @@ class PdfReportGenerator(private val context: Context) {
         section("Attention Summary")
         content.ranking.sortedByDescending { it.score }.forEach { row ->
             ensureSpace(18f)
-            canvas.drawText(row.category, 56f, y, bodyPaint)
-            canvas.drawText("${row.score}%", pageWidth - 88f, y, bodyPaint)
+            canvas.drawText(row.category, INDENT, y, bodyPaint)
+            drawRightAligned(canvas, "${row.score}%", pageWidth - MARGIN, y, bodyPaint)
             y += 18f
         }
         y += 16f
@@ -168,8 +204,8 @@ class PdfReportGenerator(private val context: Context) {
             section("Progress History")
             content.progressHistory.forEach { row ->
                 ensureSpace(18f)
-                canvas.drawText(row.dateLabel, 56f, y, bodyPaint)
-                canvas.drawText("${row.score}%", pageWidth - 88f, y, bodyPaint)
+                canvas.drawText(row.dateLabel, INDENT, y, bodyPaint)
+                drawRightAligned(canvas, "${row.score}%", pageWidth - MARGIN, y, bodyPaint)
                 y += 18f
             }
             y += 16f
@@ -190,7 +226,7 @@ class PdfReportGenerator(private val context: Context) {
             y += 8f
         }
 
-        document.finishPage(page)
+        finishPageWithFooter()
 
         val reportsDir = File(context.cacheDir, "reports").apply { mkdirs() }
         val file = File(reportsDir, "focusflow-report-${System.currentTimeMillis()}.pdf")
@@ -216,7 +252,33 @@ class PdfReportGenerator(private val context: Context) {
         return lines
     }
 
+    /** Right-aligns a value against [right] so score columns line up. */
+    private fun drawRightAligned(
+        canvas: android.graphics.Canvas,
+        text: String,
+        right: Float,
+        y: Float,
+        paint: Paint
+    ) {
+        canvas.drawText(text, right - paint.measureText(text), y, paint)
+    }
+
     private companion object {
+        /** Page geometry, in points. A4 at 72dpi. */
+        const val MARGIN = 48f
+        const val INDENT = 58f
+        const val CONTENT_TOP = 56f
+
+        /** Content stops above the footer rule rather than running into it. */
+        const val CONTENT_BOTTOM = 842f - 66f
+        const val FOOTER_Y = 842f - 34f
+
+        /** Print inks — see the palette note in `generate`. */
+        const val INK = 0xFF16201F.toInt()
+        const val MUTED_INK = 0xFF5A6A69.toInt()
+        const val ACCENT = 0xFF1F6F6B.toInt()
+        const val RULE = 0xFFC9D4D4.toInt()
+
         val DISCLAIMER_LINES = listOf(
             "FocusFlow is an assistive self-reflection and study-habits tool. It does not " +
                 "diagnose, screen for, or classify ADHD or any other condition, and it does not " +

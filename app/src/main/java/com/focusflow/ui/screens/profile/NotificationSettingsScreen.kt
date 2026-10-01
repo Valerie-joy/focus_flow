@@ -6,8 +6,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Summarize
@@ -19,13 +23,21 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.focusflow.ui.components.BlurBackground
+import com.focusflow.ui.components.StatusTone
+import com.focusflow.ui.components.MessageBanner
+import com.focusflow.R
 import com.focusflow.ui.components.GlassCard
 import com.focusflow.ui.components.SettingsRow
 import com.focusflow.ui.theme.FocusFlowTheme
+import com.focusflow.ui.theme.Spacing
+import com.focusflow.ui.theme.Sizing
 
 data class NotificationSettingsState(
     val pushEnabled: Boolean,
@@ -42,19 +54,42 @@ fun NotificationSettingsScreen(
     onWeeklySummaryChanged: (Boolean) -> Unit
 ) {
     BlurBackground(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
-            Spacer(modifier = Modifier.height(12.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .widthIn(max = Sizing.maxContentWidth)
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+                .padding(horizontal = Spacing.gutter)
+        ) {
+            Spacer(modifier = Modifier.height(Spacing.xs))
             IconButton(onClick = onBack) {
-                Icon(imageVector = Icons.Filled.ArrowBack, contentDescription = "Back")
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.a11y_go_back)
+                )
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(Spacing.xs))
             Text(
                 text = "Notifications",
-                style = MaterialTheme.typography.displayMedium,
-                fontWeight = FontWeight.Light,
-                color = MaterialTheme.colorScheme.onSurface
+                style = MaterialTheme.typography.headlineLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.semantics { heading() }
             )
-            Spacer(modifier = Modifier.height(24.dp))
+
+            // These switches store a preference and nothing reads it yet: the
+            // app schedules no notifications, so a "Daily reminder" left on
+            // would silently never arrive. Saying so is the honest option —
+            // removing the screen would discard a preference the user already
+            // set, and leaving it unlabelled promises delivery the app cannot
+            // make.
+            Spacer(modifier = Modifier.height(Spacing.md))
+            MessageBanner(
+                message = "Reminders aren't being sent yet. Your choices here are saved and " +
+                    "will apply once scheduled notifications are added.",
+                tone = StatusTone.NEUTRAL
+            )
+            Spacer(modifier = Modifier.height(Spacing.md))
 
             GlassCard(modifier = Modifier.fillMaxWidth()) {
                 Column {
@@ -96,7 +131,7 @@ fun NotificationSettingsScreen(
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(Spacing.xl))
         }
     }
 }
