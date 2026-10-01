@@ -1,5 +1,6 @@
 package com.focusflow.viewmodel
 
+import io.github.jan.supabase.auth.exception.AuthErrorCode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -145,5 +146,55 @@ class AuthErrorMapperTest {
         assertFalse(message.contains("password is"))
         assertFalse(message.contains("no account"))
         assertTrue(message.contains("email and password"))
+    }
+
+    // ---- confirmation-email failure -------------------------------------
+    //
+    // Observed on a real device against the live Supabase project: signup
+    // returned HTTP 500 with errorCode=UnexpectedFailure and
+    // description="Error sending confirmation email". Supabase had accepted
+    // the account step and then failed to send the email, so the generic
+    // "service hit a problem, try again shortly" was wrong twice over — the
+    // account may already exist, and retrying immediately hits the same wall.
+
+    @Test
+    fun `a failed confirmation email is not reported as a transient outage`() {
+        val failure = AuthErrorMapper.fromErrorCode(
+            AuthErrorCode.UnexpectedFailure,
+            "Error sending confirmation email"
+        )
+        assertEquals(AuthFailureKind.CONFIRMATION_EMAIL_FAILED, failure.kind)
+        assertTrue(
+            "must warn the account may already exist",
+            failure.message.contains("may have been created")
+        )
+        assertFalse(
+            "must not invite an immediate retry",
+            failure.message.contains("try again shortly")
+        )
+    }
+
+    @Test
+    fun `other unexpected failures keep the generic message`() {
+        val failure = AuthErrorMapper.fromErrorCode(
+            AuthErrorCode.UnexpectedFailure,
+            "something else entirely"
+        )
+        assertEquals(AuthFailureKind.SERVICE_UNAVAILABLE, failure.kind)
+        assertFalse(failure.message.contains("may have been created"))
+    }
+
+    /**
+     * The mapper serves registration as well as sign-in, so its generic
+     * wording must not call itself the "sign-in service" on a screen that is
+     * creating an account.
+     */
+    @Test
+    fun `generic service wording is neutral between sign-in and sign-up`() {
+        listOf(
+            AuthErrorMapper.fromErrorCode(AuthErrorCode.UnexpectedFailure, null)
+        ).forEach { failure ->
+            assertFalse(failure.message.contains("sign-in service"))
+        }
     }
 }

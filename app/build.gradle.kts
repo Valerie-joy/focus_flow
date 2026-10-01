@@ -58,6 +58,17 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    testOptions {
+        unitTests {
+            // android.util.Log throws "not mocked" in a plain JVM test. The
+            // auth error mapper logs the real backend failure before replacing
+            // it with a user-facing sentence (see AuthErrorMapper.logCause), so
+            // without this every test that maps an error fails on the logging
+            // rather than on the mapping it is actually checking.
+            isReturnDefaultValues = true
+        }
+    }
+
     buildTypes {
         release {
             // Deliberately left off, not overlooked.

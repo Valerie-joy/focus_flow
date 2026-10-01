@@ -1,5 +1,6 @@
 package com.focusflow.viewmodel
 
+import android.util.Log
 import io.github.jan.supabase.auth.exception.AuthErrorCode
 import io.github.jan.supabase.auth.exception.AuthRestException
 import io.github.jan.supabase.exceptions.HttpRequestException
@@ -23,6 +24,8 @@ enum class AuthFailureKind {
     WEAK_PASSWORD,
     RATE_LIMITED,
     SIGNUP_DISABLED,
+    /** The account step succeeded but the confirmation email could not be sent. */
+    CONFIRMATION_EMAIL_FAILED,
     SERVICE_UNAVAILABLE,
     NO_CONNECTION,
     TIMEOUT,
@@ -56,6 +59,16 @@ data class AuthFailure(val kind: AuthFailureKind, val message: String)
 object AuthErrorMapper {
 
     fun map(error: Throwable): AuthFailure {
+        // Log the real failure before it is replaced by a friendly sentence.
+        //
+        // Deliberately one-directional: the mapped message is written for the
+        // person using the app and must never carry backend detail, but with
+        // nothing logged there was no way to tell *why* a generic failure
+        // happened — a 500 from signup and a 500 from a database trigger look
+        // identical on screen. This writes the cause chain, the HTTP status and
+        // the AuthErrorCode to logcat under TAG, where a developer can read it
+        // and a user never sees it.
+        logCause(error)
         // The chain is collected once, guarding against a self-referencing
         // cause. The HTTP client wraps transport failures, so the interesting
         // exception is rarely the outermost one.
@@ -78,7 +91,7 @@ object AuthErrorMapper {
         connectivityFailure(chain)?.let { return it }
 
         chain.filterIsInstance<AuthRestException>().firstOrNull()?.let { rest ->
-            return fromErrorCode(rest.errorCode)
+            return fromErrorCode(rest.errorCode, rest.errorDescription)
         }
 
         // A non-auth REST failure: 5xx means the service is having a problem,
@@ -87,7 +100,7 @@ object AuthErrorMapper {
             if (rest.statusCode >= 500) {
                 return AuthFailure(
                     AuthFailureKind.SERVICE_UNAVAILABLE,
-                    "The sign-in service isn't responding right now. Please try again shortly."
+                    "The account service isn't responding right now. Please try again shortly."
                 )
             }
         }
@@ -96,6 +109,36 @@ object AuthErrorMapper {
             AuthFailureKind.UNKNOWN,
             "Something went wrong signing you in. Please try again."
         )
+    }
+
+    private const val TAG = "FocusFlowAuth"
+
+    /**
+     * Writes everything known about a failure to logcat.
+     *
+     * `adb logcat -s FocusFlowAuth` is the one command that answers "what did
+     * the backend actually say".
+     */
+    private fun logCause(error: Throwable) {
+        val detail = buildString {
+            var cause: Throwable? = error
+            val seen = mutableListOf<Throwable>()
+            while (cause != null && seen.none { it === cause }) {
+                seen += cause
+                append(cause::class.java.simpleName)
+                cause.message?.let { append(": ").append(it) }
+                if (cause is AuthRestException) {
+                    append(" [errorCode=").append(cause.errorCode)
+                    append(", description=").append(cause.errorDescription).append(']')
+                }
+                if (cause is RestException) {
+                    append(" [status=").append(cause.statusCode).append(']')
+                }
+                cause = cause.cause
+                if (cause != null) append("\n  caused by ")
+            }
+        }
+        Log.w(TAG, "Auth failure: $detail", error)
     }
 
     private fun connectivityFailure(chain: List<Throwable>): AuthFailure? = when {
@@ -123,7 +166,31 @@ object AuthErrorMapper {
      * — a message for an impossible state is worse than a generic one, because
      * it sends the reader looking for a setting that isn't there.
      */
-    private fun fromErrorCode(code: AuthErrorCode?): AuthFailure = when (code) {
+    /**
+     * Internal rather than private so the mapping can be unit tested directly.
+     * Building a real [AuthRestException] needs a Ktor `HttpResponse`, which
+     * would mean standing up an engine just to check a `when` branch.
+     */
+    internal fun fromErrorCode(
+        code: AuthErrorCode?,
+        description: String? = null
+    ): AuthFailure = when {
+        // Checked before the plain `code` branches: UnexpectedFailure is
+        // Supabase's catch-all, and this particular one is neither unexpected
+        // nor transient — see the branch body.
+        code == AuthErrorCode.UnexpectedFailure &&
+            description?.contains("confirmation email", ignoreCase = true) == true ->
+            AuthFailure(
+                AuthFailureKind.CONFIRMATION_EMAIL_FAILED,
+                "Your account may have been created, but the confirmation email " +
+                    "couldn't be sent. Try signing in — if that doesn't work, the " +
+                    "email service needs attention before new accounts can be confirmed."
+            )
+
+        else -> fromCodeOnly(code)
+    }
+
+    private fun fromCodeOnly(code: AuthErrorCode?): AuthFailure = when (code) {
         AuthErrorCode.InvalidCredentials, AuthErrorCode.UserNotFound -> AuthFailure(
             AuthFailureKind.INVALID_CREDENTIALS,
             // Deliberately does not say which of the two was wrong: confirming
@@ -185,7 +252,7 @@ object AuthErrorMapper {
 
         AuthErrorCode.UnexpectedFailure -> AuthFailure(
             AuthFailureKind.SERVICE_UNAVAILABLE,
-            "The sign-in service hit a problem. Please try again shortly."
+            "The account service hit a problem. Please try again shortly."
         )
 
         else -> AuthFailure(
