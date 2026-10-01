@@ -1,6 +1,8 @@
 package com.focusflow.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.focusflow.domain.dataset.StimulusDatasetValidator
 import com.focusflow.domain.models.AttentionCategory
 import com.focusflow.domain.models.CategoryAssessmentResult
@@ -9,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 enum class AssessmentPhase { PLAYING, ATTENTION_SHIFTED, RATING, COMPLETE, EXHAUSTED }
 
@@ -46,6 +49,86 @@ class AssessmentViewModel : ViewModel() {
 
     private val _state = MutableStateFlow(initialState())
     val state: StateFlow<AssessmentSessionState> = _state.asStateFlow()
+
+    /**
+     * Guards the end-of-session write. Not part of [AssessmentSessionState]
+     * because it is a record of an *effect having run*, not something the UI
+     * renders — and it must not be resettable by a state copy.
+     */
+    private var sessionPersistStarted = false
+
+    private val _persistFailed = MutableStateFlow(false)
+
+    /** True when the end-of-session save failed. Drives a retry prompt. */
+    val persistFailed: StateFlow<Boolean> = _persistFailed.asStateFlow()
+
+    /**
+     * Writes the finished session exactly once, on [viewModelScope].
+     *
+     * Two bugs are fixed by this living here rather than in the nav graph.
+     *
+     * The nav graph ran the save inside `LaunchedEffect(state.phase)` keyed on
+     * a phase that *stays* COMPLETE. Pressing Back from the results screen
+     * re-entered the playback destination with the phase unchanged, so the
+     * effect fired again and wrote **a second copy of the same session** —
+     * which then double-counted in the Dashboard's weekly total and appeared
+     * twice in the progress history. The `sessionPersistStarted` latch makes
+     * the write idempotent regardless of how often the effect re-runs.
+     *
+     * It also ran the save on `rememberCoroutineScope()`, which is cancelled
+     * when the composable leaves composition — and the very next line
+     * navigated away. The save was racing its own cancellation, so a slow
+     * write could lose a completed session silently. `viewModelScope` outlives
+     * the destination, and the ViewModel is scoped to the assessment graph, so
+     * the write survives the navigation that follows it.
+     *
+     * @param save performs the actual persistence. Passed in rather than
+     * injecting a repository so the ViewModel keeps its no-argument
+     * constructor (it is obtained via `viewModel(parentEntry)` with no factory)
+     * and stays unit-testable without Room.
+     */
+    fun persistSessionOnce(save: suspend (List<CategoryAssessmentResult>) -> Unit) {
+        if (sessionPersistStarted) return
+        sessionPersistStarted = true
+        val results = _state.value.results
+        viewModelScope.launch {
+            runCatching { save(results) }.onFailure { error ->
+                Log.e(TAG, "Failed to persist assessment session", error)
+                // Allow a retry: the latch is released only on failure, so the
+                // user can try again without risking a duplicate on success.
+                sessionPersistStarted = false
+                _persistFailed.value = true
+            }
+        }
+    }
+
+    /** Called when the user dismisses or retries after a failed save. */
+    fun clearPersistFailure() {
+        _persistFailed.value = false
+    }
+
+    /**
+     * The user chose to end the session before reaching the target.
+     *
+     * Whatever was already measured is kept and the session is treated as
+     * [AssessmentPhase.EXHAUSTED] — the same terminal state as running out of
+     * categories, which the nav graph already handles by saving and routing to
+     * results. The partially-complete profile will be labelled provisional
+     * downstream, which is exactly what it is.
+     *
+     * @return true when there was something worth showing. False means nothing
+     * was measured, and the caller should simply leave rather than present an
+     * empty results screen.
+     */
+    fun endSessionEarly(): Boolean {
+        val hasResults = _state.value.results.isNotEmpty()
+        if (hasResults) {
+            _state.update {
+                it.copy(phase = AssessmentPhase.EXHAUSTED, currentCategory = null)
+            }
+        }
+        return hasResults
+    }
 
     private fun initialState(): AssessmentSessionState {
         // Category *presentation order* is randomized per session, as the PID
@@ -206,5 +289,6 @@ class AssessmentViewModel : ViewModel() {
 
     private companion object {
         const val MAX_SKIPS_PER_CATEGORY = 2
+        const val TAG = "AssessmentViewModel"
     }
 }

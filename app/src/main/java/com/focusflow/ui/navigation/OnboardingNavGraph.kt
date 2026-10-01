@@ -1,5 +1,6 @@
 package com.focusflow.ui.navigation
 
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -14,9 +15,15 @@ import com.focusflow.data.repository.AdhdDocumentRepository
 import com.focusflow.data.repository.AdhdSelfReportRepository
 import com.focusflow.ui.screens.onboarding.AdhdAssessmentScreen
 import com.focusflow.ui.screens.onboarding.AdhdQuestionScreen
+import com.focusflow.data.repository.PickedDocument
 import com.focusflow.ui.screens.onboarding.AdhdUploadScreen
 import com.focusflow.ui.screens.onboarding.UploadState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.IOException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 
 /**
  * Phase 2 (ADHD verification) destinations.
@@ -46,18 +53,41 @@ fun NavGraphBuilder.onboardingGraph(navController: NavHostController) {
         AdhdUploadScreen(
             uploadState = uploadState,
             onFileSelected = { uri ->
-                val fileName = uri.lastPathSegment ?: "document"
-                if (!looksLikeValidDocument(fileName)) {
-                    uploadState = UploadState.Invalid("That file doesn't look like a PDF, PNG, or JPEG. Try another file.")
-                } else {
-                    uploadState = UploadState.Validating
+                // Metadata comes from the content provider, not from the URI.
+                // See PickedDocument: the previous extension check read
+                // `uri.lastPathSegment`, which for a content URI is a provider
+                // document id with no extension, so it rejected every file.
+                val picked = PickedDocument.resolve(context, uri)
+                uploadState = when {
+                    picked == null -> UploadState.Invalid(
+                        "That file couldn't be opened. Try picking it again."
+                    )
+                    !picked.isAcceptedType -> UploadState.Invalid(
+                        "That file is a ${picked.mimeType ?: "type we don't recognise"}. " +
+                            "Please choose a PDF, PNG, or JPEG."
+                    )
+                    picked.isTooLarge -> UploadState.Invalid(
+                        "That file is too large. Please choose one under 10 MB."
+                    )
+                    else -> UploadState.Validating
+                }
+                if (picked != null && uploadState is UploadState.Validating) {
                     scope.launch {
-                        uploadState = documentRepository.uploadDocument(uri, fileName).fold(
-                            onSuccess = { UploadState.Valid },
-                            onFailure = { e ->
-                                UploadState.Invalid(e.message ?: "Couldn't upload the document. Check your connection and try again.")
-                            }
-                        )
+                        // Reading the file and uploading it are both blocking
+                        // IO; they ran on the main-dispatched composable scope.
+                        uploadState = withContext(Dispatchers.IO) {
+                            documentRepository
+                                .uploadDocument(picked.uri, picked.displayName)
+                                .fold(
+                                    onSuccess = { UploadState.Valid },
+                                    // e.message here is a Supabase/Ktor string.
+                                    // It is logged, not shown.
+                                    onFailure = { e ->
+                                        Log.w("AdhdUpload", "Document upload failed", e)
+                                        UploadState.Invalid(uploadFailureMessage(e))
+                                    }
+                                )
+                        }
                     }
                 }
             },
@@ -86,6 +116,31 @@ fun NavGraphBuilder.onboardingGraph(navController: NavHostController) {
     }
 }
 
-/** Fast client-side pre-filter before attempting an upload — not a real validation. */
-private fun looksLikeValidDocument(fileName: String): Boolean =
-    fileName.substringAfterLast('.', "").lowercase() in setOf("pdf", "png", "jpg", "jpeg")
+/**
+ * Turns an upload failure into something actionable, without putting backend
+ * text on screen.
+ *
+ * The connectivity cases are by far the most common here, and they are the ones
+ * the user can do something about; everything else gets one honest sentence.
+ */
+private fun uploadFailureMessage(error: Throwable): String {
+    val chain = buildList {
+        var cause: Throwable? = error
+        while (cause != null && none { it === cause }) {
+            add(cause)
+            cause = cause.cause
+        }
+    }
+    return when {
+        chain.any { it is UnknownHostException } ->
+            "No internet connection. Connect and try the upload again."
+        chain.any { it is SocketTimeoutException } ->
+            "The upload timed out. Check your connection and try again."
+        chain.any { it is IOException } ->
+            "Couldn't reach the server to upload your document. Try again shortly."
+        // Thrown by AdhdDocumentRepository when there is no signed-in user.
+        chain.any { it is IllegalStateException } ->
+            error.message ?: "Couldn't upload the document. Please try again."
+        else -> "Couldn't upload the document. Please try again."
+    }
+}

@@ -3,7 +3,6 @@ package com.focusflow.ui.navigation
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -14,6 +13,7 @@ import androidx.navigation.compose.navigation
 import com.focusflow.data.local.FocusFlowDatabase
 import com.focusflow.data.repository.AssessmentRepository
 import com.focusflow.domain.usecases.CalculateAttentionScoreUseCase
+import com.focusflow.ui.components.PremiumDialog
 import com.focusflow.ui.screens.assessment.AttentionAssessmentScreen
 import com.focusflow.ui.screens.assessment.AttentionShiftedScreen
 import com.focusflow.ui.screens.assessment.PostVideoRatingScreen
@@ -22,7 +22,6 @@ import com.focusflow.ui.screens.results.FullAnalysisScreen
 import com.focusflow.ui.screens.results.RecommendationsScreen
 import com.focusflow.viewmodel.AssessmentPhase
 import com.focusflow.viewmodel.AssessmentViewModel
-import kotlinx.coroutines.launch
 
 /**
  * Phase 5 (adaptive attention assessment) as a *nested* nav graph so its
@@ -51,7 +50,6 @@ fun NavGraphBuilder.assessmentGraph(navController: NavHostController) {
             val viewModel: AssessmentViewModel = viewModel(parentEntry)
             val state by viewModel.state.collectAsStateWithLifecycle()
             val context = LocalContext.current
-            val scope = rememberCoroutineScope()
             val repository = remember {
                 AssessmentRepository(FocusFlowDatabase.getInstance(context).assessmentDao())
             }
@@ -60,23 +58,45 @@ fun NavGraphBuilder.assessmentGraph(navController: NavHostController) {
             when (state.phase) {
                 AssessmentPhase.COMPLETE, AssessmentPhase.EXHAUSTED -> {
                     LaunchedEffect(state.phase) {
-                        // Save now, at the true end of the session, rather than
-                        // waiting for the final "Continue" tap on Recommendations —
-                        // three more screens sit between here and there with no
-                        // BackHandler, so waiting risks silently losing a finished
-                        // session if the user backs out along the way.
-                        scope.launch { repository.saveSession(scoreUseCase.scoreAll(state.results)) }
-                        navController.navigate(FocusFlowDestinations.ATTENTION_RESULTS)
+                        // Save at the true end of the session rather than
+                        // waiting for the final "Continue" on Recommendations —
+                        // three screens sit between here and there, so waiting
+                        // risks silently losing a finished session if the user
+                        // backs out along the way.
+                        //
+                        // The write now lives on the ViewModel's scope and is
+                        // latched against repeats; see persistSessionOnce for
+                        // the duplicate-session and cancelled-write bugs that
+                        // fixes.
+                        viewModel.persistSessionOnce { results ->
+                            repository.saveSession(scoreUseCase.scoreAll(results))
+                        }
+                        // popUpTo: a finished assessment must not be reachable
+                        // by pressing Back from its own results. Leaving
+                        // playback on the stack meant Back re-entered a screen
+                        // whose phase was still COMPLETE, which re-fired this
+                        // very effect.
+                        navController.navigate(FocusFlowDestinations.ATTENTION_RESULTS) {
+                            popUpTo(FocusFlowDestinations.ASSESSMENT_PLAYBACK) { inclusive = true }
+                            launchSingleTop = true
+                        }
                     }
                 }
                 AssessmentPhase.ATTENTION_SHIFTED -> {
                     LaunchedEffect(state.phase) {
-                        navController.navigate(FocusFlowDestinations.ASSESSMENT_SHIFTED)
+                        // launchSingleTop: a recomposition arriving before the
+                        // navigation settles would otherwise stack a second
+                        // copy of the same screen.
+                        navController.navigate(FocusFlowDestinations.ASSESSMENT_SHIFTED) {
+                            launchSingleTop = true
+                        }
                     }
                 }
                 AssessmentPhase.RATING -> {
                     LaunchedEffect(state.phase) {
-                        navController.navigate(FocusFlowDestinations.ASSESSMENT_RATING)
+                        navController.navigate(FocusFlowDestinations.ASSESSMENT_RATING) {
+                            launchSingleTop = true
+                        }
                     }
                 }
                 AssessmentPhase.PLAYING -> {
@@ -86,7 +106,25 @@ fun NavGraphBuilder.assessmentGraph(navController: NavHostController) {
                             category = category,
                             onAttentionMaintained = viewModel::onAttentionMaintained,
                             onAttentionShifted = viewModel::onAttentionShifted,
-                            onSkip = viewModel::skipCategory
+                            onSkip = viewModel::skipCategory,
+                            onExit = {
+                                // Anything already measured is worth keeping and
+                                // showing; a session with nothing in it just
+                                // leaves, rather than landing the user on an
+                                // empty results screen.
+                                val hasResults = viewModel.endSessionEarly()
+                                if (!hasResults) {
+                                    navController.navigate(FocusFlowDestinations.DASHBOARD) {
+                                        popUpTo(FocusFlowDestinations.ASSESSMENT_GRAPH) {
+                                            inclusive = true
+                                        }
+                                        launchSingleTop = true
+                                    }
+                                }
+                                // With results, endSessionEarly() moves the
+                                // phase to EXHAUSTED and the effect above saves
+                                // and routes to results.
+                            }
                         )
                     }
                 }
@@ -130,11 +168,42 @@ fun NavGraphBuilder.assessmentGraph(navController: NavHostController) {
             }
             val viewModel: AssessmentViewModel = viewModel(parentEntry)
             val state by viewModel.state.collectAsStateWithLifecycle()
+            val persistFailed by viewModel.persistFailed.collectAsStateWithLifecycle()
+            val context = LocalContext.current
+            val repository = remember {
+                AssessmentRepository(FocusFlowDatabase.getInstance(context).assessmentDao())
+            }
+            val scoreUseCase = remember { CalculateAttentionScoreUseCase() }
 
             AttentionResultsScreen(
                 results = state.results,
-                onViewFullAnalysis = { navController.navigate(FocusFlowDestinations.FULL_ANALYSIS) }
+                onViewFullAnalysis = {
+                    navController.navigate(FocusFlowDestinations.FULL_ANALYSIS) {
+                        launchSingleTop = true
+                    }
+                }
             )
+
+            // A failed save used to be swallowed entirely: the user saw their
+            // results, left, and the session was simply absent from history
+            // with no explanation. They now get the choice to retry.
+            if (persistFailed) {
+                PremiumDialog(
+                    title = "Couldn't save this session",
+                    message = "Your results are shown below, but they weren't written to " +
+                        "your history. Retry now, or they'll be lost when you leave.",
+                    onDismiss = { viewModel.clearPersistFailure() },
+                    primaryActionLabel = "Retry",
+                    onPrimaryAction = {
+                        viewModel.clearPersistFailure()
+                        viewModel.persistSessionOnce { results ->
+                            repository.saveSession(scoreUseCase.scoreAll(results))
+                        }
+                    },
+                    secondaryActionLabel = "Not now",
+                    onSecondaryAction = { viewModel.clearPersistFailure() }
+                )
+            }
         }
 
         composable(FocusFlowDestinations.FULL_ANALYSIS) { backStackEntry ->

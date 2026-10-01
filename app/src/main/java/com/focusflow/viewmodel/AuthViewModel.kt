@@ -3,67 +3,27 @@ package com.focusflow.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.focusflow.data.repository.AuthRepository
-import io.github.jan.supabase.auth.exception.AuthErrorCode
-import io.github.jan.supabase.auth.exception.AuthRestException
 import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.io.IOException
-import java.net.SocketTimeoutException
-import java.net.UnknownHostException
 
 data class AuthUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
+    /**
+     * What kind of failure produced [errorMessage], so a screen can respond
+     * rather than only display. A rate limit wants the retry button held back
+     * for a moment; an already-registered email wants a route to sign in
+     * instead; a cancellation wants no UI at all.
+     */
+    val errorKind: AuthFailureKind? = null,
     /** Set when sign-in fails specifically because the account's email
      * isn't confirmed yet — drives a "resend confirmation email" prompt. */
     val unconfirmedEmail: String? = null
 )
-
-/**
- * Turns a failure into something a user can act on.
- *
- * Without this, `e.message` goes straight to the screen, and a phone that
- * simply has no working connection shows the raw Ktor text — "HTTP request to
- * https://<project>.supabase.co/auth/v1/token?grant_type=password (POST)
- * failed with message: Unable to resolve host ... No address associated with
- * hostname". That names the backend host in the UI, reads as a server fault
- * when the server is fine, and tells the user nothing they can do.
- *
- * Connectivity problems surface as [UnknownHostException] (DNS failed —
- * nearly always no internet), timeouts, or a bare [IOException], and any of
- * them can arrive wrapped by the HTTP client, so the whole cause chain is
- * checked. Anything else keeps its own message: Supabase's auth errors
- * ("Invalid login credentials") are already meaningful.
- */
-internal fun friendlyAuthError(error: Throwable, fallback: String): String {
-    // Collect the chain once, guarding against a self-referencing cause.
-    val chain = buildList {
-        var cause: Throwable? = error
-        while (cause != null && none { it === cause }) {
-            add(cause)
-            cause = cause.cause
-        }
-    }
-
-    // Specific causes are looked for across the whole chain *before* the
-    // generic one. UnknownHostException and SocketTimeoutException both extend
-    // IOException, and the HTTP client wraps them in a plain IOException, so
-    // matching in chain order would let the generic wrapper answer first and
-    // report "couldn't reach the server" for what is really no connection.
-    return when {
-        chain.any { it is UnknownHostException } ->
-            "No internet connection. Check your Wi-Fi or mobile data and try again."
-        chain.any { it is SocketTimeoutException } ->
-            "The connection timed out. Check your internet and try again."
-        chain.any { it is IOException } ->
-            "Couldn't reach the server. Check your internet and try again."
-        else -> error.message ?: fallback
-    }
-}
 
 /**
  * Owns loading/error state for the auth screens and forwards to
@@ -79,24 +39,37 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
     val sessionStatus: StateFlow<SessionStatus> = repository.sessionStatus
 
     fun signIn(email: String, password: String, onSuccess: () -> Unit) {
-        _state.update { it.copy(isLoading = true, errorMessage = null, unconfirmedEmail = null) }
+        // Guard a second submission while one is in flight. The screens disable
+        // their buttons too, but the ViewModel is the only place that can be
+        // certain: a rapid double tap can land before recomposition has applied
+        // the disabled state.
+        if (_state.value.isLoading) return
+        _state.update {
+            it.copy(
+                isLoading = true,
+                errorMessage = null,
+                errorKind = null,
+                unconfirmedEmail = null
+            )
+        }
         viewModelScope.launch {
             val result = repository.signInWithEmail(email, password)
             _state.update { it.copy(isLoading = false) }
             result.fold(
                 onSuccess = { onSuccess() },
                 onFailure = { e ->
-                    if (e is AuthRestException && e.errorCode == AuthErrorCode.EmailNotConfirmed) {
-                        _state.update {
-                            it.copy(
-                                errorMessage = "Please confirm your email before signing in.",
-                                unconfirmedEmail = email
-                            )
-                        }
-                    } else {
-                        _state.update {
-                            it.copy(errorMessage = friendlyAuthError(e, "Couldn't sign in — check your email and password."))
-                        }
+                    val failure = AuthErrorMapper.map(e)
+                    _state.update {
+                        it.copy(
+                            errorMessage = failure.message,
+                            errorKind = failure.kind,
+                            // Detected from the mapped kind rather than an
+                            // inline type check, so sign-in and registration
+                            // agree on what an unconfirmed account looks like.
+                            unconfirmedEmail = email.takeIf {
+                                failure.kind == AuthFailureKind.EMAIL_NOT_CONFIRMED
+                            }
+                        )
                     }
                 }
             )
@@ -115,13 +88,19 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         onNeedsConfirmation: () -> Unit,
         onLoggedIn: () -> Unit
     ) {
-        _state.update { it.copy(isLoading = true, errorMessage = null) }
+        if (_state.value.isLoading) return
+        _state.update { it.copy(isLoading = true, errorMessage = null, errorKind = null) }
         viewModelScope.launch {
             val result = repository.signUpWithEmail(email, password, fullName)
             _state.update { it.copy(isLoading = false) }
             result.fold(
-                onSuccess = { loggedInImmediately -> if (loggedInImmediately) onLoggedIn() else onNeedsConfirmation() },
-                onFailure = { e -> _state.update { it.copy(errorMessage = friendlyAuthError(e, "Couldn't create your account.")) } }
+                onSuccess = { loggedInImmediately ->
+                    if (loggedInImmediately) onLoggedIn() else onNeedsConfirmation()
+                },
+                onFailure = { e ->
+                    val failure = AuthErrorMapper.map(e)
+                    _state.update { it.copy(errorMessage = failure.message, errorKind = failure.kind) }
+                }
             )
         }
     }
@@ -130,19 +109,18 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         viewModelScope.launch {
             repository.resendConfirmationEmail(email).fold(
                 onSuccess = { onResult(true, "Confirmation email resent — check your inbox.") },
-                onFailure = { e -> onResult(false, friendlyAuthError(e, "Couldn't resend the confirmation email.")) }
+                onFailure = { e -> onResult(false, AuthErrorMapper.map(e).message) }
             )
         }
     }
 
     fun clearUnconfirmedEmail() {
-        _state.update { it.copy(unconfirmedEmail = null, errorMessage = null) }
+        _state.update { it.copy(unconfirmedEmail = null, errorMessage = null, errorKind = null) }
     }
 
     fun signInWithGoogleIdToken(idToken: String, onSuccess: () -> Unit) {
         runAuthAction(
             action = { repository.signInWithGoogleIdToken(idToken) },
-            defaultErrorMessage = "Google sign-in failed.",
             onSuccess = onSuccess
         )
     }
@@ -151,31 +129,49 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
         viewModelScope.launch {
             repository.resetPasswordForEmail(email).fold(
                 onSuccess = { onResult(true, "Check your email for a reset link.") },
-                onFailure = { e -> onResult(false, friendlyAuthError(e, "Couldn't send a reset link.")) }
+                onFailure = { e -> onResult(false, AuthErrorMapper.map(e).message) }
             )
         }
     }
 
-    fun signOut() {
-        viewModelScope.launch { repository.signOut() }
+    /**
+     * @param onSignedOut invoked once the session is cleared, whether or not
+     * the server call succeeded.
+     *
+     * A failed sign-out used to be swallowed silently, leaving the user on a
+     * screen still showing their data with no indication the tap did anything.
+     * The Supabase client clears the local session regardless, so proceeding is
+     * correct — but the caller is now told, and can navigate.
+     */
+    fun signOut(onSignedOut: () -> Unit = {}) {
+        if (_state.value.isLoading) return
+        _state.update { it.copy(isLoading = true, errorMessage = null, errorKind = null) }
+        viewModelScope.launch {
+            repository.signOut()
+            _state.update { it.copy(isLoading = false) }
+            onSignedOut()
+        }
     }
 
     fun clearError() {
-        _state.update { it.copy(errorMessage = null) }
+        _state.update { it.copy(errorMessage = null, errorKind = null) }
     }
 
     private fun runAuthAction(
         action: suspend () -> Result<Unit>,
-        defaultErrorMessage: String,
         onSuccess: () -> Unit
     ) {
-        _state.update { it.copy(isLoading = true, errorMessage = null) }
+        if (_state.value.isLoading) return
+        _state.update { it.copy(isLoading = true, errorMessage = null, errorKind = null) }
         viewModelScope.launch {
             val result = action()
             _state.update { it.copy(isLoading = false) }
             result.fold(
                 onSuccess = { onSuccess() },
-                onFailure = { e -> _state.update { it.copy(errorMessage = friendlyAuthError(e, defaultErrorMessage)) } }
+                onFailure = { e ->
+                    val failure = AuthErrorMapper.map(e)
+                    _state.update { it.copy(errorMessage = failure.message, errorKind = failure.kind) }
+                }
             )
         }
     }

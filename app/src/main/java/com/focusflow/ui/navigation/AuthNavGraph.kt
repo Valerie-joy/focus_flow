@@ -16,14 +16,17 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import android.content.Context
 import com.focusflow.auth.GoogleSignInHelper
+import com.focusflow.auth.SignInCancelled
 import com.focusflow.data.local.UserPreferences
 import com.focusflow.data.repository.AuthRepository
 import com.focusflow.data.repository.ProfileRepository
+import com.focusflow.domain.validation.AuthInputValidator
 import com.focusflow.ui.components.PremiumDialog
 import com.focusflow.ui.screens.auth.LoginScreen
 import com.focusflow.ui.screens.auth.RegisterScreen
 import com.focusflow.ui.screens.auth.SplashScreen
 import com.focusflow.ui.screens.auth.WelcomeScreen
+import com.focusflow.viewmodel.AuthFailureKind
 import com.focusflow.viewmodel.AuthViewModel
 import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.launch
@@ -87,26 +90,44 @@ fun NavGraphBuilder.authGraph(navController: NavHostController) {
         )
         val googleSignInHelper = remember { GoogleSignInHelper(context) }
         val profileRepository = remember { ProfileRepository(context.applicationContext) }
+        val authState by authViewModel.state.collectAsStateWithLifecycle()
         var googleErrorMessage by remember { mutableStateOf<String?>(null) }
+        // Covers the credential-sheet round trip, which happens before the
+        // ViewModel is involved at all — authState.isLoading only starts once
+        // the token is in hand, so on its own it leaves the tap unacknowledged.
+        var fetchingGoogleCredential by remember { mutableStateOf(false) }
 
         WelcomeScreen(
             onLogIn = { navController.navigate(FocusFlowDestinations.LOGIN) },
             onCreateAccount = { navController.navigate(FocusFlowDestinations.REGISTER) },
+            isGoogleSignInLoading = fetchingGoogleCredential || authState.isLoading,
             onContinueWithGoogle = {
+                if (fetchingGoogleCredential || authState.isLoading) return@WelcomeScreen
+                fetchingGoogleCredential = true
                 scope.launch {
-                    googleSignInHelper.getGoogleIdToken().fold(
+                    val tokenResult = googleSignInHelper.getGoogleIdToken()
+                    fetchingGoogleCredential = false
+                    tokenResult.fold(
                         onSuccess = { idToken ->
                             authViewModel.signInWithGoogleIdToken(idToken) {
                                 scope.launch {
-                                    navController.navigate(postAuthDestination(context.applicationContext, profileRepository))
+                                    navController.navigateAfterAuth(
+                                        postAuthDestination(context.applicationContext, profileRepository)
+                                    )
                                 }
                             }
                         },
-                        onFailure = { e -> googleErrorMessage = e.message ?: "Google sign-in failed." }
+                        // A cancelled sheet is the user changing their mind,
+                        // not a failure; showing a dialog for it told them off
+                        // for it. Anything else gets its real message.
+                        onFailure = { e ->
+                            if (e !== SignInCancelled) {
+                                googleErrorMessage = e.message ?: "Google sign-in failed."
+                            }
+                        }
                     )
                 }
             },
-            onContinueWithApple = { /* out of scope: needs an Apple Developer account + Services ID */ }
         )
 
         if (googleErrorMessage != null) {
@@ -135,7 +156,10 @@ fun NavGraphBuilder.authGraph(navController: NavHostController) {
         LoginScreen(
             onBack = { navController.popBackStack() },
             onForgotPassword = { email ->
-                if (email.isBlank()) {
+                // Checked against the same rule the form uses, rather than only
+                // for blankness: sending a reset to "jordan@" produced a
+                // success-shaped message for an email that could never arrive.
+                if (AuthInputValidator.emailError(email) != null) {
                     forgotPasswordNeedsEmail = true
                 } else {
                     authViewModel.forgotPassword(email) { _, message ->
@@ -146,7 +170,9 @@ fun NavGraphBuilder.authGraph(navController: NavHostController) {
             onSignIn = { email, password ->
                 authViewModel.signIn(email, password) {
                     scope.launch {
-                        navController.navigate(postAuthDestination(context.applicationContext, profileRepository))
+                        navController.navigateAfterAuth(
+                            postAuthDestination(context.applicationContext, profileRepository)
+                        )
                     }
                 }
             },
@@ -156,8 +182,9 @@ fun NavGraphBuilder.authGraph(navController: NavHostController) {
 
         if (forgotPasswordNeedsEmail) {
             PremiumDialog(
-                title = "Enter your email",
-                message = "Type your email in the field above, then tap \"Forgot password?\" again.",
+                title = "Check your email address",
+                message = "Enter the email address for your account in the field above, then " +
+                    "tap \"Forgot password?\" again and we'll send a reset link to it.",
                 onDismiss = { forgotPasswordNeedsEmail = false }
             )
         }
@@ -207,6 +234,19 @@ fun NavGraphBuilder.authGraph(navController: NavHostController) {
 
         RegisterScreen(
             onBack = { navController.popBackStack() },
+            // When the failure is specifically "this email already has an
+            // account", the useful next step is signing in — not re-reading the
+            // same error. Any other failure leaves this null and no extra
+            // action is offered.
+            onGoToSignIn = if (state.errorKind == AuthFailureKind.EMAIL_ALREADY_REGISTERED) {
+                {
+                    authViewModel.clearError()
+                    navController.navigate(FocusFlowDestinations.LOGIN) {
+                        popUpTo(FocusFlowDestinations.REGISTER) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            } else null,
             onCreateAccount = { form ->
                 authViewModel.register(
                     email = form.email,
@@ -218,7 +258,9 @@ fun NavGraphBuilder.authGraph(navController: NavHostController) {
                     },
                     onLoggedIn = {
                         scope.launch {
-                            navController.navigate(postAuthDestination(context.applicationContext, profileRepository))
+                            navController.navigateAfterAuth(
+                                postAuthDestination(context.applicationContext, profileRepository)
+                            )
                         }
                     }
                 )
@@ -282,4 +324,27 @@ private suspend fun postAuthDestination(
         email = profile.email.orEmpty()
     )
     return FocusFlowDestinations.DASHBOARD
+}
+
+/**
+ * Navigates onward from a successful authentication, clearing the whole auth
+ * flow behind it.
+ *
+ * Every sign-in path previously used a bare `navigate(...)`, which left
+ * Splash, Welcome, Login and Register on the back stack. Pressing Back from
+ * the Dashboard therefore returned the user to the sign-in screen while they
+ * were *already signed in* — a state with no correct behaviour, since signing
+ * in again just pushes another Dashboard on top.
+ *
+ * `popUpTo(SPLASH) { inclusive = true }` removes the entire auth section, so
+ * Back from the first post-auth screen exits the app, which is what a user
+ * expects from a root destination. `launchSingleTop` additionally makes a
+ * double-tap on a slow "Sign in" harmless: the second navigation reuses the
+ * destination instead of stacking a duplicate.
+ */
+private fun NavHostController.navigateAfterAuth(destination: String) {
+    navigate(destination) {
+        popUpTo(FocusFlowDestinations.SPLASH) { inclusive = true }
+        launchSingleTop = true
+    }
 }
