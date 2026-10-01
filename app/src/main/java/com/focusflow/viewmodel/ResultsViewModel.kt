@@ -71,12 +71,7 @@ class ResultsViewModel(private val repository: AssessmentRepository) : ViewModel
             .map { CategoryRankEntry(AttentionCategory.displayNameFor(it.categoryId), it.score) }
             .sortedByDescending { it.score }
 
-        val insight = latestRanking.firstOrNull()?.let { top ->
-            "Your attention is strongest with ${top.category} content (${top.score}%). " +
-                (latestRanking.lastOrNull()?.let { weakest ->
-                    "It dips most with ${weakest.category} (${weakest.score}%) — that's a good place to try shorter, more interactive material."
-                } ?: "")
-        }
+        val insight = buildInsight(latestRanking)
 
         val progressHistory = sessionsByTime
             .sortedBy { it.value.first().timestampMs }
@@ -149,4 +144,44 @@ class ResultsViewModel(private val repository: AssessmentRepository) : ViewModel
 
     private fun formatFullDate(timestampMs: Long): String =
         SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).format(Date(timestampMs))
+
 }
+
+/**
+ * Percentage points between the best and worst category before the insight
+ * will describe one as stronger than the other.
+ */
+internal const val MIN_MEANINGFUL_SPREAD = 5
+
+/**
+ * The "what we noticed" line.
+ *
+ * Only claims a strongest and a weakest category when the scores actually
+ * differ. Previously it always named `first()` and `last()` of the sorted
+ * ranking, so a session where every category scored the same produced
+ * "strongest with Music (49%) ... dips most with Romance (49%)" — asserting
+ * a difference the numbers do not show. That state is reachable in normal
+ * use: skipping every category gives them all an identical score, which is
+ * exactly where this was observed on device.
+ *
+ * [MIN_MEANINGFUL_SPREAD] is a presentation threshold, not a statistical
+ * one. It only decides whether the app is willing to describe a gap in
+ * words; the scores themselves are shown in full either way.
+ */
+internal fun buildInsight(ranking: List<CategoryRankEntry>): String? {
+    val top = ranking.firstOrNull() ?: return null
+    val weakest = ranking.lastOrNull()
+
+    if (weakest == null || weakest.category == top.category ||
+        top.score - weakest.score < MIN_MEANINGFUL_SPREAD
+    ) {
+        // Flat session: report what was measured without ranking it.
+        return "Your attention held fairly evenly across the categories in this " +
+            "session, around ${top.score}%. A longer session would show more of a spread."
+    }
+
+    return "Your attention is strongest with ${top.category} content (${top.score}%). " +
+        "It dips most with ${weakest.category} (${weakest.score}%) — that's a good " +
+        "place to try shorter, more interactive material."
+}
+
