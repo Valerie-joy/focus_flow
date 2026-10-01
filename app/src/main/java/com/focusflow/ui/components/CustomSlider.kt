@@ -68,12 +68,24 @@ fun CustomSlider(
 
 @Composable
 private fun RatingDot(number: Int, selected: Boolean, onClick: () -> Unit) {
+    val selectedContainer = MaterialTheme.colorScheme.primary
     val colors = LocalFocusFlowColors.current
     val bg by animateColorAsState(
-        targetValue = if (selected) Primary else colors.glassSurface,
+        // Was the hardcoded `Primary` constant, which is the *light mode*
+        // teal - so a selected rating dot kept its light-mode fill on a dark
+        // screen instead of following the theme.
+        targetValue = if (selected) {
+            selectedContainer
+        } else {
+            colors.glassSurface
+        },
         label = "ratingDotColor"
     )
-    val textColor = if (selected) Color.White else MaterialTheme.colorScheme.onSurface
+    val textColor = if (selected) {
+        MaterialTheme.colorScheme.onPrimary
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
 
     Box(
         modifier = Modifier

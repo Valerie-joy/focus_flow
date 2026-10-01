@@ -85,7 +85,13 @@ fun SelectableOptionCard(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                // See the NumberStepper note: white on `primary` fails in dark
+                // mode, where primary is a light teal.
+                tint = if (selected) {
+                    MaterialTheme.colorScheme.onPrimary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
             )
         }
     }

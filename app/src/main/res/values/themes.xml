@@ -3,5 +3,16 @@
     <style name="Theme.FocusFlow" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+
+        <!--
+          The window the Activity is drawn into. Without this the platform used
+          Material 3's baseline surface (a pale lavender), so a cold launch
+          flashed an off-brand colour before Compose drew anything.
+
+          The Android 12+ splash screen is themed separately in
+          res/values-v31/themes.xml: android:windowSplashScreenBackground only
+          exists from API 31, and this app supports API 26.
+        -->
+        <item name="android:windowBackground">@color/focusflow_window_background</item>
     </style>
 </resources>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  API 31+ only. The splash-screen attributes below do not exist on older
+  platforms, where the base theme's android:windowBackground already provides
+  the launch colour. Keeping them in a versioned folder is what lets minSdk
+  stay at 26 without a lint suppression.
+
+  @color/focusflow_window_background resolves per-mode on its own (there is a
+  values-night copy), so one override covers light and dark.
+-->
+<resources>
+    <style name="Theme.FocusFlow" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/focusflow_window_background</item>
+        <item name="android:windowSplashScreenBackground">@color/focusflow_window_background</item>
+    </style>
+</resources>

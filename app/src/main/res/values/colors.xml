@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The handful of colours the *XML* theme needs.
+
+  Everything the user sees inside the app is themed in Compose
+  (ui/theme/Color.kt), but the window background and the Android 12+ splash are
+  drawn by the platform from the XML theme before any Compose code runs. With
+  nothing declared, those inherited Material 3's baseline palette — a pale
+  lavender — so every cold launch showed an off-brand tint for a beat before
+  jumping to FocusFlow's own near-white surface. Observed on device.
+
+  These two values mirror LightBackground / DarkBackground in Color.kt and
+  should be changed together with them.
+-->
+<resources>
+    <color name="focusflow_window_background">#FFF7F9F9</color>
+</resources>

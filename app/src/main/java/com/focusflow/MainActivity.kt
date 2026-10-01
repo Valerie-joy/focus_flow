@@ -69,8 +69,19 @@ class MainActivity : ComponentActivity() {
     private companion object {
         const val EXTRA_DEBUG_START_ROUTE = "focusflow.debug.startRoute"
 
-        /** Top-level routes safe to start at (not the nested assessment graph). */
+        /**
+         * Top-level routes safe to start at (not the nested assessment graph).
+         *
+         * The onboarding screens were added here so each can be opened directly
+         * for on-device QA — checking the questionnaire at a large font scale
+         * should not require creating an account and walking five steps first,
+         * which is exactly what this mechanism exists for.
+         */
         val DEBUG_STARTABLE_ROUTES = setOf(
+            FocusFlowDestinations.ADHD_QUESTION,
+            FocusFlowDestinations.ADHD_ASSESSMENT,
+            FocusFlowDestinations.ADHD_UPLOAD,
+            FocusFlowDestinations.USER_REGISTRATION,
             FocusFlowDestinations.CAMERA_PERMISSION,
             FocusFlowDestinations.CAMERA_CALIBRATION,
             FocusFlowDestinations.DASHBOARD

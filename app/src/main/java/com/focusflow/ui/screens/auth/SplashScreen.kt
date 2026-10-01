@@ -23,9 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.focusflow.ui.components.BlurBackground
@@ -34,8 +32,16 @@ import kotlinx.coroutines.delay
 import kotlin.random.Random
 
 /**
- * First screen shown on app launch. Purely presentational + a timed
- * navigation callback — no business logic here per the "no logic in
+ * First screen shown on app launch.
+ *
+ * The wordmark and tagline were drawn in [Color.White] over the app's page
+ * background. That was legible against the original dark-tinted gradient, but
+ * the background is now a near-white wash in light mode, leaving white text on
+ * an almost-white surface at roughly 1.1:1 contrast - present on screen and
+ * effectively unreadable. Confirmed on device, not inferred. Both now take
+ * their colour from the theme, so they follow light and dark correctly.
+ *
+ * Purely presentational + a timed navigation callback — no business logic here per the "no logic in
  * composables" architecture rule; the ViewModel/nav graph decides where
  * [onFinished] actually routes to (e.g. Welcome, or Dashboard if a session
  * already exists).
@@ -68,14 +74,13 @@ fun SplashScreen(
         ) {
             Text(
                 text = "FocusFlow",
-                style = MaterialTheme.typography.displayLarge,
-                fontWeight = FontWeight.Light,
-                color = Color.White
+                style = MaterialTheme.typography.displayMedium,
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = "Understand your attention.",
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color.White.copy(alpha = 0.85f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -88,6 +93,9 @@ fun SplashScreen(
  */
 @Composable
 private fun FloatingParticles(modifier: Modifier = Modifier) {
+    // Was hardcoded white at 10-20% alpha, which on the light background wash
+    // drew nothing at all - an infinite animation rendering invisible dots.
+    val particleColor = MaterialTheme.colorScheme.primary
     val particleCount = 18
     val seeds = remember {
         List(particleCount) { Random.nextFloat() to Random.nextFloat() }
@@ -109,7 +117,7 @@ private fun FloatingParticles(modifier: Modifier = Modifier) {
             val cx = baseX * size.width
             val cy = baseY * size.height + driftY
             drawCircle(
-                color = Color.White.copy(alpha = 0.10f + 0.10f * ((index % 3) / 2f)),
+                color = particleColor.copy(alpha = 0.05f + 0.05f * ((index % 3) / 2f)),
                 radius = particleRadiusPx(index),
                 center = Offset(cx, cy)
             )

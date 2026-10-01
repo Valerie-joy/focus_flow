@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dark-mode counterpart; mirrors DarkBackground in ui/theme/Color.kt. -->
+<resources>
+    <color name="focusflow_window_background">#FF0F1415</color>
+</resources>

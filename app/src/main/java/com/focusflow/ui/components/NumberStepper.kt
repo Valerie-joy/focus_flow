@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.focusflow.ui.theme.FocusFlowRadius
+import com.focusflow.ui.theme.Sizing
 import com.focusflow.ui.theme.LocalFocusFlowColors
 
 /**
@@ -43,7 +45,7 @@ fun NumberStepper(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .defaultMinSize(minHeight = Sizing.controlHeight)
             .clip(shape)
             .background(colors.glassSurface)
             .border(width = 1.dp, color = colors.glassBorder, shape = shape)
@@ -85,6 +87,15 @@ private fun StepperButton(symbol: String, enabled: Boolean, onClick: () -> Unit)
             ),
         contentAlignment = Alignment.Center
     ) {
-        Text(text = symbol, style = MaterialTheme.typography.titleLarge, color = androidx.compose.ui.graphics.Color.White)
+        // colorScheme.onPrimary, not Color.White. `primary` is a dark teal in
+        // light mode but a *light* teal in dark mode, so hardcoded white sat
+        // at roughly 1.9:1 against it - confirmed unreadable on device in the
+        // dark-mode pass. onPrimary is defined as the correct contrast pair
+        // for whatever primary currently is.
+        Text(
+            text = symbol,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onPrimary
+        )
     }
 }
