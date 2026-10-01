@@ -35,7 +35,7 @@ class AuthErrorMapperTest {
     @Test
     fun `dns failure reports no internet rather than the raw host`() {
         val real = UnknownHostException(
-            "Unable to resolve host \"edmqbypcbinqtutgttpl.supabase.co\": " +
+            "Unable to resolve host \"your-project-ref.supabase.co\": " +
                 "No address associated with hostname"
         )
         val failure = AuthErrorMapper.map(real)
