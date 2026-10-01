@@ -29,6 +29,13 @@ android {
         versionCode = 1
         versionName = "1.0"
 
+        // Without this, AGP falls back to android.test.InstrumentationTestRunner
+        // — the pre-AndroidX runner, which does not understand
+        // @RunWith(AndroidJUnit4::class). `connectedDebugAndroidTest` then
+        // scanned the whole 118 MB APK classpath, found zero tests, and exited
+        // *successfully*, so the suite appeared to pass while never running.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
         buildConfigField("String", "SUPABASE_URL", "\"${localProp("SUPABASE_URL")}\"")
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"${localProp("SUPABASE_PUBLISHABLE_KEY")}\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${localProp("GOOGLE_WEB_CLIENT_ID")}\"")
@@ -53,7 +60,33 @@ android {
 
     buildTypes {
         release {
+            // Deliberately left off, not overlooked.
+            //
+            // R8 would help here (the APK carries MediaPipe, LiteRT and the
+            // full Supabase/Ktor stack), but three of this app's dependencies
+            // are exactly the kind R8 breaks quietly rather than loudly:
+            //
+            //  - kotlinx-serialization, which Supabase uses for every model,
+            //    resolves serializers reflectively at runtime. Stripped
+            //    `Companion.serializer()` methods fail at the first network
+            //    call, not at build time.
+            //  - MediaPipe's tasks-vision and LiteRT both reach native code
+            //    through JNI, which R8 cannot see; the Java side of those
+            //    bridges has to be kept explicitly.
+            //  - Room's generated DAO implementations are looked up by name.
+            //
+            // None of those failures appear in a build log. They appear as a
+            // release build that installs, opens, and then fails at sign-in or
+            // when the gaze model loads. Verifying that needs a release build
+            // run end to end on a physical device, which was not available
+            // here — so enabling it would mean shipping an untested change to
+            // the one build type users actually receive.
+            //
+            // To enable: turn both flags on, add keep rules for the four
+            // libraries above, then exercise sign-in, an assessment with
+            // tracking, and a PDF export on a real device.
             isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }
@@ -134,4 +167,15 @@ dependencies {
 
     // Unit tests (JVM only, no device/emulator required)
     testImplementation("junit:junit:4.13.2")
+
+    // Compose UI tests (instrumented — these need a device or emulator).
+    // Added for the auth/validation and results-rendering behaviours that can
+    // only be checked against a real composition: focus order, IME actions,
+    // error placement and the disabled/loading states of the submit button.
+    // The BOM already pins compose-ui versions, so no versions are named here.
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.06.01"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    // Supplies the empty activity the Compose test rule hosts content in.
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
