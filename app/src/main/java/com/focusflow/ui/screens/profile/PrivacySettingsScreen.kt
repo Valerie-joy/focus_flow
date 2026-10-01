@@ -105,7 +105,7 @@ fun PrivacySettingsScreen(
                         Switch(
                             checked = anonymizedAnalyticsEnabled,
                             onCheckedChange = onAnonymizedAnalyticsChanged,
-                            colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary)
+                            colors = SwitchDefaults.colors()
                         )
                     }
                 )

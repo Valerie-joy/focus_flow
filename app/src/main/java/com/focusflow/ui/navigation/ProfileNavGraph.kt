@@ -40,7 +40,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Phase 10 destinations: the Profile hub plus its five sub-screens.
- * "AI Recommendations" rebuilds CategoryAttentionScore entries directly
+ * "Your suggestions" rebuilds CategoryAttentionScore entries directly
  * from the latest persisted session's exact stored scores (see the inline
  * comment) rather than routing through CalculateAttentionScoreUseCase
  * again, so the numbers shown match what the user already saw in Results.

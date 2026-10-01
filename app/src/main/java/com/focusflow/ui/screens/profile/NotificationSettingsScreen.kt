@@ -101,7 +101,7 @@ fun NotificationSettingsScreen(
                             Switch(
                                 checked = state.pushEnabled,
                                 onCheckedChange = onPushChanged,
-                                colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary)
+                                colors = SwitchDefaults.colors()
                             )
                         }
                     )
@@ -113,7 +113,7 @@ fun NotificationSettingsScreen(
                             Switch(
                                 checked = state.dailyReminderEnabled,
                                 onCheckedChange = onDailyReminderChanged,
-                                colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary)
+                                colors = SwitchDefaults.colors()
                             )
                         }
                     )
@@ -125,7 +125,7 @@ fun NotificationSettingsScreen(
                             Switch(
                                 checked = state.weeklySummaryEnabled,
                                 onCheckedChange = onWeeklySummaryChanged,
-                                colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary)
+                                colors = SwitchDefaults.colors()
                             )
                         }
                     )

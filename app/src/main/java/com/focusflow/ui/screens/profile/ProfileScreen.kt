@@ -120,7 +120,11 @@ fun ProfileScreen(
                     )
                     SettingsRow(
                         icon = Icons.Filled.AutoAwesome,
-                        label = "AI Recommendations",
+                        // Not "AI Recommendations": the engine is a deterministic,
+                        // offline weighted tally (GenerateRecommendationsUseCase), and
+                        // the screen this opens is titled "What might work for you".
+                        // The old label was the last place in the app still claiming AI.
+                        label = "Your suggestions",
                         onClick = onAiRecommendations
                     )
                     SettingsRow(
@@ -150,7 +154,7 @@ fun ProfileScreen(
                             Switch(
                                 checked = darkModeOverride ?: systemDark,
                                 onCheckedChange = { onDarkModeOverrideChange(it) },
-                                colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary)
+                                colors = SwitchDefaults.colors()
                             )
                         }
                     )
