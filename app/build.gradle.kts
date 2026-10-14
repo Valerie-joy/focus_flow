@@ -23,7 +23,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.focusflow"
+        applicationId = "com.scc.focusflow"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
