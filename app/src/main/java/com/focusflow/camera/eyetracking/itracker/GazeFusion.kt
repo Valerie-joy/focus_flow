@@ -16,8 +16,11 @@ package com.focusflow.camera.eyetracking.itracker
  * Rules:
  *  * A turned-away head always wins — no gaze model is trusted through a
  *    profile view.
- *  * When a calibrated point is available it decides, because it is the
- *    finer instrument and the calibration validated it on this user.
+ *  * A calibrated point can confirm that gaze is on-screen, but an off-screen
+ *    point only counts as away when the every-frame blendshape signal agrees.
+ *    The point-of-regard model is sensitive to small changes in phone pose;
+ *    letting it veto an otherwise centred face/eyes caused focused users to
+ *    be removed from a clip after a single biased estimate.
  *  * Between iTracker frames the last verdict is carried forward while it is
  *    fresh; once it goes stale the blendshape rule takes over. Frame order is
  *    preserved because iTracker runs synchronously on the landmarker's
@@ -66,7 +69,13 @@ class GazeFusion(
             recent.addLast(screenPoint)
             while (recent.size > medianWindow) recent.removeFirst()
             val filtered = medianOf(recent)
-            val on = filtered.isOnScreen(onScreenMargin)
+            val pointOnScreen = filtered.isOnScreen(onScreenMargin)
+            // False "attention shifted" events are more damaging than
+            // missing a marginal glance near an edge. The calibrated point is
+            // therefore corroborating evidence: either signal may keep the
+            // user on-screen, while both must agree before gaze alone marks
+            // them away. A turned head was handled above and still wins.
+            val on = pointOnScreen || blendshapeLooking
             lastVerdict = on
             lastVerdictMs = timestampMs
             return Decision(isLooking = on, fromGazePoint = true, screenPoint = filtered)

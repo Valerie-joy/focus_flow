@@ -18,19 +18,21 @@ class GazeFusionTest {
     }
 
     @Test
-    fun gazePointDecidesWhenPresent() {
+    fun gazePointKeepsAttentionWhenEitherSignalStillSaysOnScreen() {
         // Window of 1 so the median filter (tested separately) stays out of this.
         val f = GazeFusion(medianWindow = 1)
         assertTrue(f.decide(false, false, on, 0).isLooking)   // blendshape said no, point says yes
-        assertFalse(f.decide(true, false, off, 33).isLooking) // and the reverse
-        assertTrue(f.decide(true, false, off, 33).fromGazePoint)
+        assertTrue(f.decide(true, false, off, 33).isLooking)  // biased point cannot veto centred eyes
+        val agreedAway = f.decide(false, false, off, 66)
+        assertFalse(agreedAway.isLooking)
+        assertTrue(agreedAway.fromGazePoint)
     }
 
     @Test
     fun verdictCarriesForwardWhileFreshThenFallsBackToBlendshape() {
         val f = GazeFusion(staleAfterMs = 400)
-        assertFalse(f.decide(true, false, off, 1000).isLooking)
-        val carried = f.decide(true, false, null, 1300)
+        assertFalse(f.decide(false, false, off, 1000).isLooking)
+        val carried = f.decide(false, false, null, 1300)
         assertFalse(carried.isLooking)
         assertTrue(carried.fromGazePoint)
         val stale = f.decide(true, false, null, 1500)

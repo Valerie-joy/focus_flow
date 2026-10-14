@@ -141,7 +141,16 @@ class AttentionTracker(
             window.removeFirst()
         }
         val windowLooking = window.count { it.second }
-        val ratioDrop = window.size >= minFramesBeforeEvaluating &&
+        // Do not call a "rolling-window" drop until the window really spans
+        // its configured duration. With only the frame-count gate, a 30 fps
+        // device evaluated after ~0.5 s (15 frames), so camera/model warm-up
+        // could end a clip long before the 1.5 s sustained-away rule.
+        // Measured from session start, not window.first(): the trim above
+        // keeps the window's span <= rollingWindowMs, so with real (jittery)
+        // frame timestamps it almost never equals it exactly.
+        val windowIsFull = window.size >= minFramesBeforeEvaluating &&
+            timestampMs - (sessionStartMs ?: timestampMs) >= rollingWindowMs
+        val ratioDrop = windowIsFull &&
             (windowLooking.toFloat() / window.size) < attentionDropThreshold
 
         // A ratio drop is a first sustained lapse too, and it must be recorded

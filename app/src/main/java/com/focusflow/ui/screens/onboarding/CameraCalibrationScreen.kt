@@ -245,6 +245,10 @@ fun CameraCalibrationScreen(
             UserPreferences(context).saveGazeCalibration(fit)
             fitResult = fit
         } else {
+            // A failed retry must not silently leave an older calibration in
+            // force. That old map may belong to a different phone position or
+            // (before the rotation fix) a different pixel orientation.
+            UserPreferences(context).clearGazeCalibration()
             // Advice now depends on *how* it failed: no readings at all is a
             // lighting or occlusion problem, too few dots is a fixation
             // problem, and a poor fit across all five is something else again.

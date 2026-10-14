@@ -69,6 +69,54 @@ class AttentionTrackerTest {
     }
 
     @Test
+    fun `an incomplete rolling window cannot end the clip during warm-up`() {
+        val tracker = tracker()
+        var dropped = false
+        var t = 0L
+        // Fifteen noisy frames satisfy the old frame-count gate but span only
+        // 1.4 seconds, not the configured three-second rolling window. Keep
+        // each away run below the separate 1.5-second sustain threshold.
+        repeat(15) { index ->
+            val looking = index == 7
+            dropped = dropped || tracker.recordFrame(true, looking, false, t)
+                .attentionDroppedSustained
+            t += 100L
+        }
+        assertFalse(dropped)
+    }
+
+    @Test
+    fun `a full rolling window with mostly away frames reports a drop`() {
+        val tracker = tracker()
+        var dropped = false
+        var t = 0L
+        repeat(31) { index ->
+            // Alternate often enough that no individual away run reaches
+            // 1.5 seconds; the full-window ratio is what should catch this.
+            val looking = index % 3 == 0
+            dropped = dropped || tracker.recordFrame(true, looking, false, t)
+                .attentionDroppedSustained
+            t += 100L
+        }
+        assertTrue(dropped)
+    }
+
+    @Test
+    fun `a full rolling window still reports a drop with jittery frame times`() {
+        val tracker = tracker()
+        var dropped = false
+        var t = 0L
+        repeat(120) { index ->
+            // ~30 fps timestamps never land exactly on the 3 s window edge.
+            val looking = index % 3 == 0
+            dropped = dropped || tracker.recordFrame(true, looking, false, t)
+                .attentionDroppedSustained
+            t += 33L
+        }
+        assertTrue(dropped)
+    }
+
+    @Test
     fun `a sustained look away past the threshold reports a drop`() {
         val tracker = tracker()
         var t = tracker.feed(30, looking = true, startMs = 0L)

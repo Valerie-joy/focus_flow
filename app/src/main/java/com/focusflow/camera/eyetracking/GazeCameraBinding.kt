@@ -108,6 +108,15 @@ fun bindGazeCamera(
                     )
                     .build()
             )
+            // Deliver the analysis buffer in the display's upright
+            // orientation. MediaPipe's landmarks are reported in that same
+            // orientation, and iTracker crops the pixels using those
+            // landmarks. Leaving CameraX's default (sensor-oriented buffers)
+            // made the debug crop appear 90 degrees sideways on portrait
+            // phones, so the model saw a rotated face even though the preview
+            // was upright. With rotation enabled, ImageInfo reports 0 degrees
+            // and both models operate in one coordinate space.
+            .setOutputImageRotationEnabled(true)
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .build()
             // A dedicated background thread: inference on the main executor
