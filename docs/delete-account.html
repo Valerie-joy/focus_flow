@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deleting your FocusFlow account</title>
+<meta name="description" content="How to delete your FocusFlow account and data, what is removed, and what is kept.">
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f5f7f7;
+    --text: #1a1c1c;
+    --muted: #4a5252;
+    --accent: #1f6f6b;
+    --line: #d8dede;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101414;
+      --surface: #182020;
+      --text: #e8eceb;
+      --muted: #a8b4b2;
+      --accent: #7fd3cb;
+      --line: #2a3434;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  main { max-width: 46rem; margin: 0 auto; padding: 3rem 16px 5rem; }
+  h1 { font-size: 1.9rem; line-height: 1.25; margin: 0 0 .4rem; font-weight: 600; }
+  h2 { font-size: 1.25rem; margin: 2.75rem 0 .75rem; font-weight: 600; }
+  h3 { font-size: 1.02rem; margin: 1.75rem 0 .5rem; font-weight: 600; }
+  .app { color: var(--muted); margin: 0 0 2rem; }
+  .app code { background: var(--surface); padding: .12em .4em; border-radius: 4px; font-size: .9em; }
+  a { color: var(--accent); }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .95rem; }
+  th, td { text-align: left; padding: .6rem .7rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; }
+  ol, ul { padding-left: 1.3rem; }
+  li { margin: .35rem 0; }
+  .note {
+    background: var(--surface);
+    border-left: 3px solid var(--accent);
+    padding: .9rem 1.1rem;
+    margin: 1.25rem 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .contact { font-size: 1.05rem; }
+  footer { margin-top: 3.5rem; padding-top: 1.25rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .9rem; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Deleting your FocusFlow account</h1>
+<p class="app">FocusFlow &mdash; <code>com.scc.focusflow</code></p>
+
+<p>This page explains how to have your FocusFlow account and its data deleted,
+what is removed, and what is kept.</p>
+
+<h2>How to request deletion</h2>
+
+<h3>From inside the app</h3>
+<ol>
+  <li>Open FocusFlow and sign in.</li>
+  <li>Go to <strong>Profile</strong>.</li>
+  <li>Scroll to the bottom and tap <strong>Delete account</strong>.</li>
+  <li>Confirm when asked.</li>
+</ol>
+<p>Your account and the data listed below are deleted immediately. You are
+signed out and returned to the welcome screen.</p>
+<div class="note">
+  If anything could not be deleted &mdash; for example the app had no internet
+  connection at the time &mdash; the app says so before returning you to the
+  welcome screen, and tells you to use the email route below. It never reports
+  success for a deletion that did not finish.
+</div>
+
+<h3>By email</h3>
+<p>If you cannot sign in, email <strong><a href="mailto:support@focusflow.app">support@focusflow.app</a></strong>
+from the address your account uses, with the subject
+<strong>&ldquo;Delete my FocusFlow account&rdquo;</strong>.</p>
+<p>We reply within 7 days and complete the deletion within 30 days. We may ask
+you to confirm from the registered email address before deleting anything, so
+that nobody else can delete your account.</p>
+
+<h2>What is deleted</h2>
+<p>Everything below is erased permanently and cannot be recovered.</p>
+<table>
+  <thead><tr><th>Data</th><th>Where it was stored</th></tr></thead>
+  <tbody>
+    <tr><td>Your sign-in account (email address and password credentials)</td><td>Supabase Auth</td></tr>
+    <tr><td>Your profile: full name, email address, age, sex</td><td>Supabase database and on your device</td></tr>
+    <tr><td>Attention assessment results: per-category scores, the measurements behind them, session dates</td><td>Supabase database and on your device</td></tr>
+    <tr><td>Self-report questionnaire answers</td><td>On your device</td></tr>
+    <tr><td>Any diagnosis document you chose to upload</td><td>Supabase Storage</td></tr>
+    <tr><td>App settings: theme choice, notification preferences</td><td>On your device</td></tr>
+  </tbody>
+</table>
+<p>Uninstalling the app also removes everything stored on your device, but it
+does <strong>not</strong> delete your account. Use one of the two methods above
+for that.</p>
+
+<h2>What is kept, and for how long</h2>
+<table>
+  <thead><tr><th>Data</th><th>Retention</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Server backups containing your records</td><td>Up to 30 days, then overwritten</td><td>Backups run on a fixed cycle and cannot be edited individually</td></tr>
+    <tr><td>Security and error logs that may include your account identifier</td><td>Up to 90 days</td><td>Needed to investigate abuse and faults</td></tr>
+  </tbody>
+</table>
+<p>Neither is used to rebuild your profile or your results after deletion.</p>
+
+<h2>What was never collected</h2>
+<p>FocusFlow measures attention using your device&rsquo;s front camera. Camera
+frames are analysed <strong>on your device</strong> and discarded immediately.
+No photo, video, facial image or facial landmark is ever recorded, uploaded or
+stored &mdash; there is nothing of that kind to delete, because none of it ever
+left your phone.</p>
+<p>Only the derived numbers (for example &ldquo;eyes on screen 82% of the
+clip&rdquo;) are saved.</p>
+
+<h2>Questions</h2>
+<p class="contact"><a href="mailto:support@focusflow.app">support@focusflow.app</a></p>
+
+<footer>FocusFlow &mdash; account deletion policy</footer>
+
+</main>
+</body>
+</html>

@@ -5,6 +5,10 @@
 This page explains how to have your FocusFlow account and its data deleted, what
 is removed, and what is kept.
 
+> `delete-account.html` in this folder is the same content as a standalone page,
+> and is what the Play Console "Delete account URL" field points at. Change both
+> together.
+
 ---
 
 ## How to request deletion
