@@ -25,6 +25,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.focusflow.auth.GoogleSignInHelper
 import com.focusflow.ui.components.BlurBackground
 import com.focusflow.ui.components.PrimaryButton
 import com.focusflow.ui.components.SecondaryButton
@@ -58,7 +59,10 @@ fun WelcomeScreen(
     onCreateAccount: () -> Unit,
     onContinueWithGoogle: () -> Unit,
     modifier: Modifier = Modifier,
-    isGoogleSignInLoading: Boolean = false
+    isGoogleSignInLoading: Boolean = false,
+    // A parameter rather than a direct BuildConfig read, so previews and
+    // Compose tests can render both states.
+    showGoogleSignIn: Boolean = GoogleSignInHelper.isConfigured()
 ) {
     BlurBackground(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
@@ -108,23 +112,31 @@ fun WelcomeScreen(
                     enabled = !isGoogleSignInLoading
                 )
 
-                Spacer(modifier = Modifier.height(Spacing.md))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    HairlineDivider()
-                    Text(
-                        text = "  or  ",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    HairlineDivider()
-                }
-                Spacer(modifier = Modifier.height(Spacing.md))
+                // Shown only when a real OAuth client ID is configured. With
+                // the placeholder still in local.properties the button could
+                // never succeed, so every tap ended in an error dialog — and
+                // the divider above it advertised a choice that did not exist.
+                // Supplying GOOGLE_WEB_CLIENT_ID brings both back with no code
+                // change; see SUPABASE_SETUP.md.
+                if (showGoogleSignIn) {
+                    Spacer(modifier = Modifier.height(Spacing.md))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        HairlineDivider()
+                        Text(
+                            text = "  or  ",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        HairlineDivider()
+                    }
+                    Spacer(modifier = Modifier.height(Spacing.md))
 
-                SecondaryButton(
-                    text = "Continue with Google",
-                    onClick = onContinueWithGoogle,
-                    loading = isGoogleSignInLoading
-                )
+                    SecondaryButton(
+                        text = "Continue with Google",
+                        onClick = onContinueWithGoogle,
+                        loading = isGoogleSignInLoading
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(Spacing.md))
                 Text(
@@ -154,7 +166,12 @@ private fun RowScope.HairlineDivider() {
 @Composable
 private fun WelcomeScreenPreview() {
     FocusFlowTheme {
-        WelcomeScreen(onLogIn = {}, onCreateAccount = {}, onContinueWithGoogle = {})
+        WelcomeScreen(
+            onLogIn = {},
+            onCreateAccount = {},
+            onContinueWithGoogle = {},
+            showGoogleSignIn = false
+        )
     }
 }
 
@@ -166,7 +183,8 @@ private fun WelcomeScreenLoadingPreview() {
             onLogIn = {},
             onCreateAccount = {},
             onContinueWithGoogle = {},
-            isGoogleSignInLoading = true
+            isGoogleSignInLoading = true,
+            showGoogleSignIn = true
         )
     }
 }

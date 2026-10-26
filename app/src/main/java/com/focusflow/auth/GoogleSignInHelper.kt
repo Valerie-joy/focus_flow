@@ -23,8 +23,23 @@ private const val PLACEHOLDER_CLIENT_ID = "REPLACE_ME_GOOGLE_WEB_CLIENT_ID"
  */
 class GoogleSignInHelper(private val context: Context) {
 
+    companion object {
+        /**
+         * Whether a real OAuth client ID has been supplied.
+         *
+         * The UI uses this to leave the Google button out altogether rather
+         * than show one that cannot work. Failing fast with a clear message
+         * (below) is right for a developer; for a user, a visible button that
+         * always errors is worse than no button, and declaring OAuth support
+         * to the Play Store on the strength of it would be inaccurate.
+         */
+        fun isConfigured(): Boolean =
+            BuildConfig.GOOGLE_WEB_CLIENT_ID.isNotBlank() &&
+                BuildConfig.GOOGLE_WEB_CLIENT_ID != PLACEHOLDER_CLIENT_ID
+    }
+
     suspend fun getGoogleIdToken(): Result<String> {
-        if (BuildConfig.GOOGLE_WEB_CLIENT_ID.isBlank() || BuildConfig.GOOGLE_WEB_CLIENT_ID == PLACEHOLDER_CLIENT_ID) {
+        if (!isConfigured()) {
             return Result.failure(
                 IllegalStateException(
                     "Google sign-in isn't configured yet — set a real GOOGLE_WEB_CLIENT_ID in local.properties (see SUPABASE_SETUP.md)."
