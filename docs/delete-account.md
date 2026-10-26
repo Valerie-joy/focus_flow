@@ -30,7 +30,7 @@ for a deletion that did not finish.
 
 ### By email
 
-If you cannot sign in, email **support@focusflow.app** from the address your
+If you cannot sign in, email **bethanyivalerie@gmail.com** from the address your
 account uses, with the subject **"Delete my FocusFlow account"**.
 
 We reply within 7 days and complete the deletion within 30 days. We may ask you
@@ -82,4 +82,4 @@ saved.
 
 ## Questions
 
-**support@focusflow.app**
+**bethanyivalerie@gmail.com**

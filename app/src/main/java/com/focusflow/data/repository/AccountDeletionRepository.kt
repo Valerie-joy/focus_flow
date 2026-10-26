@@ -92,7 +92,7 @@ internal suspend fun runAccountDeletion(
         runCatching { steps.deleteAuthUser() }.onFailure {
             logFailure("delete_current_user RPC failed", it)
             failure = "Your sign-in account could not be removed. Email " +
-                "support@focusflow.app and it will be deleted for you."
+                "bethanyivalerie@gmail.com and it will be deleted for you."
         }
     }
 

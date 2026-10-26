@@ -62,7 +62,7 @@ class AccountDeletionTest {
 
         val reason = (result as AccountDeletionResult.LocalOnly).reason
         // The user must be given a way to finish what the app could not.
-        assertTrue(reason, reason.contains("support@focusflow.app"))
+        assertTrue(reason, reason.contains("bethanyivalerie@gmail.com"))
         // The device is still cleared — that part never depends on the server.
         assertTrue(steps.calls.contains("local"))
     }

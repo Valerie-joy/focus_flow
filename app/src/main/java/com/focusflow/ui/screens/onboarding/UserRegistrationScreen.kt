@@ -58,8 +58,19 @@ data class UserRegistrationFormState(
 )
 
 const val UNSELECTED_SEX = -1
-const val DEFAULT_AGE = 16
-val AGE_RANGE = 5..30
+
+/**
+ * 18+ to match the Play Console target-audience declaration.
+ *
+ * The picker previously ran 5..30 with a default of 16. That contradicted the
+ * store listing, and offering registration to children is what pulls an app
+ * into Google Play's Families policy — age verification, SDK restrictions and
+ * stricter data handling — none of which this app implements. The upper bound
+ * is open rather than 30: there was never a reason a 40-year-old could not use
+ * it, and a hard ceiling only produced a form that rejected them.
+ */
+const val DEFAULT_AGE = 18
+val AGE_RANGE = 18..100
 
 /**
  * "Prefer not to say" is a real option, not a fallback.

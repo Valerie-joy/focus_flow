@@ -212,7 +212,7 @@ fun NavGraphBuilder.profileGraph(navController: NavHostController) {
                 // button did nothing at all and said nothing about why.
                 EmailReportService(context).contactSupport().onFailure {
                     supportError = "No email app is set up on this device. You can reach us " +
-                        "at support@focusflow.app."
+                        "at bethanyivalerie@gmail.com."
                 }
             }
         )

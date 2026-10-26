@@ -64,7 +64,7 @@ class EmailReportService(private val context: Context) {
     ): Result<Unit> = runCatching {
         val intent = Intent(Intent.ACTION_SENDTO).apply {
             data = android.net.Uri.parse("mailto:")
-            putExtra(Intent.EXTRA_EMAIL, arrayOf("support@focusflow.app"))
+            putExtra(Intent.EXTRA_EMAIL, arrayOf("bethanyivalerie@gmail.com"))
             putExtra(Intent.EXTRA_SUBJECT, subject)
             putExtra(Intent.EXTRA_TEXT, body)
         }

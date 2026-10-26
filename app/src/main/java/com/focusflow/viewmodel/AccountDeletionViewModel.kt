@@ -59,7 +59,7 @@ class AccountDeletionViewModel(
                 // believing it did.
                 onFailure = {
                     "Your data on this device was cleared, but we couldn't confirm your " +
-                        "account was deleted. Email support@focusflow.app and it will be " +
+                        "account was deleted. Email bethanyivalerie@gmail.com and it will be " +
                         "deleted for you."
                 }
             )
