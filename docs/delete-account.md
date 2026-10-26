@@ -47,7 +47,7 @@ Everything below is erased permanently and cannot be recovered.
 |---|---|
 | Your sign-in account (email address and password credentials) | Supabase Auth |
 | Your profile: full name, email address, age, sex | Supabase database and on your device |
-| Attention assessment results: per-category scores, the measurements behind them, session dates | Supabase database and on your device |
+| Attention assessment results: per-category scores, the measurements behind them, session dates | On your device |
 | Self-report questionnaire answers | On your device |
 | Any diagnosis document you chose to upload | Supabase Storage |
 | App settings: theme choice, notification preferences | On your device |
