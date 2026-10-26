@@ -11,4 +11,8 @@ interface AdhdSelfReportDao {
 
     @Query("SELECT * FROM adhd_self_report ORDER BY timestampMs DESC LIMIT 1")
     suspend fun latest(): AdhdSelfReportEntity?
+
+    /** Used by account deletion to erase every stored questionnaire answer. */
+    @Query("DELETE FROM adhd_self_report")
+    suspend fun deleteAll()
 }

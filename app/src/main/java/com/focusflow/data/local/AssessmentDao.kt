@@ -12,4 +12,8 @@ interface AssessmentDao {
 
     @Query("SELECT * FROM assessment_history ORDER BY timestampMs DESC")
     fun observeAll(): Flow<List<AssessmentHistoryEntity>>
+
+    /** Used by account deletion to erase every stored session. */
+    @Query("DELETE FROM assessment_history")
+    suspend fun deleteAll()
 }
