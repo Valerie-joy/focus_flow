@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FocusFlow</title>
+<meta name="description" content="FocusFlow — see what holds your attention. Privacy policy and account deletion.">
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f5f7f7;
+    --text: #1a1c1c;
+    --muted: #4a5252;
+    --accent: #1f6f6b;
+    --ring: #1f6f6b;
+    --ring-bg: #cfe9e6;
+    --line: #d8dede;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101414;
+      --surface: #182020;
+      --text: #e8eceb;
+      --muted: #a8b4b2;
+      --accent: #7fd3cb;
+      --ring: #7fd3cb;
+      --ring-bg: #16302e;
+      --line: #2a3434;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    min-height: 100vh;
+  }
+  main { max-width: 40rem; margin: auto; padding: 3rem 16px; width: 100%; }
+  .mark {
+    width: 72px; height: 72px; border-radius: 18px;
+    background: var(--ring-bg);
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 1.5rem;
+  }
+  .mark span {
+    display: block; width: 32px; height: 32px; border-radius: 50%;
+    border: 8px solid var(--ring);
+  }
+  h1 { font-size: 2.1rem; line-height: 1.2; margin: 0 0 .5rem; font-weight: 600; }
+  .tagline { color: var(--muted); font-size: 1.05rem; margin: 0 0 .35rem; }
+  .pkg { color: var(--muted); font-size: .9rem; margin: 0 0 2.5rem; }
+  .pkg code { background: var(--surface); padding: .12em .4em; border-radius: 4px; }
+  p.body { margin: 0 0 2.5rem; }
+  h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 .9rem; font-weight: 600; }
+  ul { list-style: none; padding: 0; margin: 0 0 2.5rem; }
+  li { border-top: 1px solid var(--line); }
+  li:last-child { border-bottom: 1px solid var(--line); }
+  li a {
+    display: block; padding: 1rem .2rem;
+    color: var(--accent); text-decoration: none; font-weight: 500;
+  }
+  li a:hover { text-decoration: underline; }
+  li a span { display: block; color: var(--muted); font-weight: 400; font-size: .92rem; margin-top: .15rem; }
+  footer { color: var(--muted); font-size: .9rem; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+
+  <div class="mark" aria-hidden="true"><span></span></div>
+
+  <h1>FocusFlow</h1>
+  <p class="tagline">See what holds your attention.</p>
+  <p class="pkg"><code>com.scc.focusflow</code> &middot; by CSSDEVS</p>
+
+  <p class="body">
+    FocusFlow is an Android study-assistance app. You watch a few short clips
+    while the front camera follows where your eyes go, and it shows you which
+    kinds of content hold your attention. Camera frames are analysed on your
+    device and discarded immediately &mdash; no image ever leaves your phone.
+    FocusFlow is not a diagnostic tool and does not screen for ADHD.
+  </p>
+
+  <h2>Policies</h2>
+  <ul>
+    <li>
+      <a href="privacy-policy.html">Privacy Policy
+        <span>What is collected, how it is used, and what was never collected.</span>
+      </a>
+    </li>
+    <li>
+      <a href="delete-account.html">Delete your account
+        <span>How to delete your account and data, what is removed, and what is kept.</span>
+      </a>
+    </li>
+  </ul>
+
+  <footer>
+    Questions: <a href="mailto:bethanyivalerie@gmail.com">bethanyivalerie@gmail.com</a><br>
+    &copy; 2026 CSSDEVS
+  </footer>
+
+</main>
+</body>
+</html>
