@@ -17,6 +17,7 @@ import androidx.navigation.compose.composable
 import com.focusflow.data.local.AppSettings
 import com.focusflow.data.local.FocusFlowDatabase
 import com.focusflow.data.local.UserPreferences
+import com.focusflow.data.repository.AccountDeletionRepository
 import com.focusflow.data.repository.AssessmentRepository
 import com.focusflow.data.repository.AuthRepository
 import com.focusflow.domain.models.AttentionCategory
@@ -34,6 +35,7 @@ import com.focusflow.ui.screens.profile.PersonalInformationScreen
 import com.focusflow.ui.screens.profile.PrivacySettingsScreen
 import com.focusflow.ui.screens.profile.ProfileScreen
 import com.focusflow.ui.screens.results.RecommendationsScreen
+import com.focusflow.viewmodel.AccountDeletionViewModel
 import com.focusflow.viewmodel.AuthViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -62,7 +64,34 @@ fun NavGraphBuilder.profileGraph(navController: NavHostController) {
             }
         )
         val authState by authViewModel.state.collectAsStateWithLifecycle()
+        // Separate ViewModel from AuthViewModel because deletion reaches past
+        // auth into Room, SharedPreferences, Postgrest and Storage; its state
+        // also has to outlive the request long enough to report a partial
+        // failure, which is not what AuthUiState is for.
+        val deletionViewModel: AccountDeletionViewModel = viewModel(
+            factory = viewModelFactory {
+                initializer {
+                    val database = FocusFlowDatabase.getInstance(context)
+                    AccountDeletionViewModel(
+                        AccountDeletionRepository(
+                            context = context.applicationContext,
+                            assessmentDao = database.assessmentDao(),
+                            selfReportDao = database.adhdSelfReportDao()
+                        )
+                    )
+                }
+            }
+        )
+        val deletionState by deletionViewModel.state.collectAsStateWithLifecycle()
         var darkModeOverride by remember { mutableStateOf(prefs.getDarkModeOverride()) }
+
+        // Shared by sign-out and deletion: both must leave nothing of the
+        // signed-in graph on the back stack.
+        val leaveToWelcome = {
+            navController.navigate(FocusFlowDestinations.WELCOME) {
+                popUpTo(0) { inclusive = true }
+            }
+        }
 
         ProfileScreen(
             userName = prefs.getName() ?: "there",
@@ -86,12 +115,32 @@ fun NavGraphBuilder.profileGraph(navController: NavHostController) {
                 // cache is only cleared once the session actually is.
                 authViewModel.signOut {
                     prefs.clearAll()
-                    navController.navigate(FocusFlowDestinations.WELCOME) {
-                        popUpTo(0) { inclusive = true }
+                    leaveToWelcome()
+                }
+            },
+            isDeletingAccount = deletionState.isDeleting,
+            onDeleteAccount = {
+                deletionViewModel.deleteAccount {
+                    // On a partial failure the user stays here to read the
+                    // dialog below; dismissing it navigates. Leaving first
+                    // would clear this ViewModel and the message with it.
+                    if (deletionViewModel.state.value.partialFailureMessage == null) {
+                        leaveToWelcome()
                     }
                 }
             }
         )
+
+        deletionState.partialFailureMessage?.let { message ->
+            PremiumDialog(
+                title = "Not everything could be deleted",
+                message = message,
+                onDismiss = {
+                    deletionViewModel.clearPartialFailure()
+                    leaveToWelcome()
+                }
+            )
+        }
     }
 
     composable(FocusFlowDestinations.PERSONAL_INFORMATION) {

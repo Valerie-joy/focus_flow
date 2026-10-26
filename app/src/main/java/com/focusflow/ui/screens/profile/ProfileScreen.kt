@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -32,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -69,10 +71,13 @@ fun ProfileScreen(
     onPrivacy: () -> Unit,
     onHelpSupport: () -> Unit,
     onLogout: () -> Unit,
+    onDeleteAccount: () -> Unit,
     modifier: Modifier = Modifier,
-    isSigningOut: Boolean = false
+    isSigningOut: Boolean = false,
+    isDeletingAccount: Boolean = false
 ) {
     var showLogoutConfirm by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
     val systemDark = isSystemInDarkTheme()
 
     BlurBackground(modifier = modifier.fillMaxSize()) {
@@ -178,6 +183,33 @@ fun ProfileScreen(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 contentColor = MaterialTheme.colorScheme.error
             )
+
+            Spacer(modifier = Modifier.height(Spacing.sm))
+            // Google Play requires an in-app route to account deletion that is
+            // as easy to find as the rest of account management, so it lives
+            // here next to sign-out rather than buried in Privacy. It is a text
+            // button, not a filled one: discoverable without inviting a tap,
+            // since unlike "Log out" it cannot be undone.
+            TextButton(
+                onClick = { showDeleteConfirm = true },
+                enabled = !isDeletingAccount,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = Sizing.minTouchTarget)
+            ) {
+                Text(
+                    text = if (isDeletingAccount) "Deleting account…" else "Delete account",
+                    style = MaterialTheme.typography.labelLarge,
+                    // Explicit, so it has to be dimmed explicitly too — a
+                    // hardcoded error red on a disabled button would still look
+                    // tappable while the deletion is already running.
+                    color = if (isDeletingAccount) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    }
+                )
+            }
             Spacer(modifier = Modifier.height(Spacing.xl))
         }
     }
@@ -195,6 +227,26 @@ fun ProfileScreen(
             },
             secondaryActionLabel = stringResource(R.string.action_cancel),
             onSecondaryAction = { showLogoutConfirm = false }
+        )
+    }
+
+    if (showDeleteConfirm) {
+        PremiumDialog(
+            title = "Delete your account?",
+            // Spells out what goes, because this is the one action in the app
+            // with no undo and no backup the user can restore from.
+            message = "This permanently deletes your account, your profile, every " +
+                "assessment result, your questionnaire answers and any document you " +
+                "uploaded. It cannot be undone.\n\nYou'll be returned to the welcome " +
+                "screen.",
+            onDismiss = { showDeleteConfirm = false },
+            primaryActionLabel = "Delete account",
+            onPrimaryAction = {
+                showDeleteConfirm = false
+                onDeleteAccount()
+            },
+            secondaryActionLabel = stringResource(R.string.action_cancel),
+            onSecondaryAction = { showDeleteConfirm = false }
         )
     }
 }
@@ -249,7 +301,8 @@ private fun ProfileScreenPreview() {
             onNotifications = {},
             onPrivacy = {},
             onHelpSupport = {},
-            onLogout = {}
+            onLogout = {},
+            onDeleteAccount = {}
         )
     }
 }
